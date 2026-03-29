@@ -4,9 +4,21 @@ import { DeviceSession } from "../bluetooth/device-session.js";
 import { WindowsHelperClient, createWindowsHelperRuntime } from "../bluetooth/helper-client.js";
 import { ReadHoldingRegisters } from "../core/commands.js";
 import { createDeviceFromAdvertisement } from "../devices/registry.js";
+import { hasHelpFlag, HelpError, optionalSingleAddressArg, runCli } from "./shared.js";
+
+const HELP_TEXT = `Usage: bluetti-mqtt-node-probe [BLUETOOTH_MAC]
+
+Without an address, scan for nearby devices.
+With an address, connect and run a single register-read probe.
+`;
 
 async function main(): Promise<void> {
-  const [, , address] = process.argv;
+  const argv = process.argv.slice(2);
+  if (hasHelpFlag(argv)) {
+    throw new HelpError(HELP_TEXT);
+  }
+
+  const address = optionalSingleAddressArg(argv, HELP_TEXT);
 
   const client = new WindowsHelperClient();
   try {
@@ -40,11 +52,7 @@ async function main(): Promise<void> {
   }
 }
 
-void main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.stack ?? error.message : String(error);
-  console.error(message);
-  process.exitCode = 1;
-});
+runCli(main);
 
 function bigintReplacer(_key: string, value: unknown): unknown {
   return typeof value === "bigint" ? value.toString() : value;

@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 
-import { normalizeValue, runPollingCommands, withConnectedDevice } from "./shared.js";
+import { normalizeValue, requireSingleAddressArg, runCli, runPollingCommands, withConnectedDevice } from "./shared.js";
+
+const HELP_TEXT = `Usage: bluetti-mqtt-node-logger <BLUETOOTH_MAC>
+
+Run the device logging command set and print parsed results as JSON.
+`;
 
 async function main(): Promise<void> {
-  const [, , address] = process.argv;
-  if (!address) {
-    throw new Error("Usage: node dist/cli/bluetti-logger.js <BLUETOOTH_MAC>");
-  }
+  const address = requireSingleAddressArg(process.argv.slice(2), HELP_TEXT);
 
   const payload = await withConnectedDevice(address, async ({ device, session }) => {
     const results = await runPollingCommands(session, device, device.loggingCommands);
@@ -26,8 +28,4 @@ async function main(): Promise<void> {
   console.log(JSON.stringify(payload, null, 2));
 }
 
-void main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.stack ?? error.message : String(error);
-  console.error(message);
-  process.exitCode = 1;
-});
+runCli(main);
