@@ -54,6 +54,12 @@ Publish the helper as a self-contained single-file Windows executable:
 npm run helper:publish
 ```
 
+Publish a smaller framework-dependent single-file executable:
+
+```powershell
+npm run helper:publish:portable
+```
+
 That writes the release artifact to:
 
 ```text
@@ -61,3 +67,11 @@ artifacts/helper/win-x64/BluettiMqtt.BluetoothHelper.exe
 ```
 
 The Node runtime prefers that published executable when it exists, and falls back to `dotnet run` from source during development.
+
+The portable variant is written to:
+
+```text
+artifacts/helper/win-x64-fdd/BluettiMqtt.BluetoothHelper.exe
+```
+
+Use the portable build when you control the target machine and can rely on a matching .NET runtime being installed. Use the self-contained build when you want the fewest runtime prerequisites.
