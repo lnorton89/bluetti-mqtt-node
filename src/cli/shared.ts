@@ -4,6 +4,10 @@ import type { ReadHoldingRegisters } from "../core/commands.js";
 import type { BluettiDevice } from "../devices/device.js";
 import { createDeviceFromAdvertisement } from "../devices/registry.js";
 
+export class UsageError extends Error {}
+
+export class HelpError extends Error {}
+
 export async function withConnectedDevice<T>(
   address: string,
   work: (context: ConnectedDeviceContext) => Promise<T>,
@@ -87,4 +91,77 @@ export interface PollCommandResult {
   readonly command: ReadHoldingRegisters;
   readonly response: Uint8Array;
   readonly parsed: Record<string, unknown>;
+}
+
+export function hasHelpFlag(argv: readonly string[]): boolean {
+  return argv.includes("--help") || argv.includes("-h");
+}
+
+export function requireSingleAddressArg(argv: readonly string[], helpText: string): string {
+  if (hasHelpFlag(argv)) {
+    throw new HelpError(helpText);
+  }
+
+  if (argv.length !== 1 || !argv[0]) {
+    throw new UsageError(helpText);
+  }
+
+  return argv[0];
+}
+
+export function optionalSingleAddressArg(argv: readonly string[], helpText: string): string | undefined {
+  if (hasHelpFlag(argv)) {
+    throw new HelpError(helpText);
+  }
+
+  if (argv.length > 1) {
+    throw new UsageError(helpText);
+  }
+
+  return argv[0];
+}
+
+export function runCli(main: () => Promise<void>): void {
+  void main().catch((error: unknown) => {
+    if (error instanceof HelpError) {
+      console.log(error.message);
+      process.exitCode = 0;
+      return;
+    }
+
+    if (error instanceof UsageError) {
+      console.error(error.message);
+      process.exitCode = 1;
+      return;
+    }
+
+    const message = error instanceof Error ? error.stack ?? error.message : String(error);
+    console.error(message);
+    process.exitCode = 1;
+  });
+}
+
+export function installSignalHandlers(onSignal: () => void | Promise<void>): () => void {
+  let stopping = false;
+
+  const handler = (): void => {
+    if (stopping) {
+      return;
+    }
+
+    stopping = true;
+    void Promise.resolve(onSignal()).catch((error: unknown) => {
+      const message = error instanceof Error ? error.stack ?? error.message : String(error);
+      console.error(message);
+      process.exitCode = 1;
+    });
+  };
+
+  process.on("SIGINT", handler);
+  process.on("SIGTERM", handler);
+
+  return () => {
+    process.off("SIGINT", handler);
+    process.off("SIGTERM", handler);
+  };
 }

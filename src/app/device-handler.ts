@@ -8,6 +8,8 @@ import type { BluettiDevice } from "../devices/device.js";
 export class DeviceHandler {
   private readonly devices = new Map<string, BluettiDevice>();
   private commandListenerAttached = false;
+  private stopRequested = false;
+  private readonly sleepWaiters = new Set<() => void>();
 
   constructor(
     private readonly manager: MultiDeviceManager,
@@ -49,6 +51,7 @@ export class DeviceHandler {
   }
 
   async run(): Promise<void> {
+    this.stopRequested = false;
     await this.connectAll();
 
     await Promise.all(this.manager.addresses.map(async (address) => {
@@ -57,32 +60,51 @@ export class DeviceHandler {
         return;
       }
 
-      while (true) {
+      while (!this.stopRequested) {
         await this.pollOnce(address);
+
+        if (this.stopRequested) {
+          break;
+        }
 
         if (device.packPollingCommands.length > 0) {
           for (let pack = 1; pack <= device.packNumMax; pack += 1) {
+            if (this.stopRequested) {
+              break;
+            }
+
             if (device.packNumMax > 1 && device.hasFieldSetter("pack_num")) {
               const setter = device.buildSetterCommand("pack_num", pack);
               await this.manager.getSession(address).perform(setter);
-              await sleep(500);
+              await this.sleep(500);
             }
 
             for (const command of device.packPollingCommands) {
+              if (this.stopRequested) {
+                break;
+              }
               await this.executeReadCommand(device, command);
             }
           }
         }
 
-        if (this.runOnce) {
+        if (this.runOnce || this.stopRequested) {
           break;
         }
 
         if (this.intervalMs > 0) {
-          await sleep(this.intervalMs);
+          await this.sleep(this.intervalMs);
         }
       }
     }));
+  }
+
+  stop(): void {
+    this.stopRequested = true;
+    for (const wake of this.sleepWaiters) {
+      wake();
+    }
+    this.sleepWaiters.clear();
   }
 
   private async handleCommand(message: CommandMessage<BluettiDevice, DeviceCommand>): Promise<void> {
@@ -110,8 +132,31 @@ export class DeviceHandler {
       throw error;
     }
   }
-}
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  private async sleep(ms: number): Promise<void> {
+    if (this.stopRequested || ms <= 0) {
+      return;
+    }
+
+    await new Promise<void>((resolve) => {
+      let finished = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+
+      const done = (): void => {
+        if (finished) {
+          return;
+        }
+
+        finished = true;
+        if (timer !== undefined) {
+          clearTimeout(timer);
+        }
+        this.sleepWaiters.delete(done);
+        resolve();
+      };
+
+      this.sleepWaiters.add(done);
+      timer = setTimeout(done, ms);
+    });
+  }
 }

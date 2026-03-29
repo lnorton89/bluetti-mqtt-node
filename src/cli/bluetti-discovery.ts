@@ -1,8 +1,18 @@
 #!/usr/bin/env node
 
 import { WindowsHelperClient, createWindowsHelperRuntime } from "../bluetooth/helper-client.js";
+import { hasHelpFlag, HelpError, runCli } from "./shared.js";
+
+const HELP_TEXT = `Usage: bluetti-mqtt-node-discovery
+
+Scan for nearby Bluetti BLE devices and print them as JSON.
+`;
 
 async function main(): Promise<void> {
+  if (hasHelpFlag(process.argv.slice(2))) {
+    throw new HelpError(HELP_TEXT);
+  }
+
   const client = new WindowsHelperClient();
   try {
     const runtime = createWindowsHelperRuntime(client);
@@ -13,8 +23,4 @@ async function main(): Promise<void> {
   }
 }
 
-void main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.stack ?? error.message : String(error);
-  console.error(message);
-  process.exitCode = 1;
-});
+runCli(main);

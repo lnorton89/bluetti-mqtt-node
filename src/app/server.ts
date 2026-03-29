@@ -30,6 +30,10 @@ export class BluettiMqttServer {
     await this.deviceHandler.connectAll();
   }
 
+  async stop(): Promise<void> {
+    this.deviceHandler.stop();
+  }
+
   async run(): Promise<void> {
     await this.mqttBridge.run();
     try {

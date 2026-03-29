@@ -1,10 +1,29 @@
 #!/usr/bin/env node
 
 import { WindowsHelperClient, createWindowsHelperRuntime } from "../bluetooth/helper-client.js";
-import { normalizeValue, runPollingCommands, withConnectedDevice } from "./shared.js";
+import {
+  hasHelpFlag,
+  HelpError,
+  normalizeValue,
+  optionalSingleAddressArg,
+  runCli,
+  runPollingCommands,
+  withConnectedDevice,
+} from "./shared.js";
+
+const HELP_TEXT = `Usage: bluetti-mqtt-node-poll [BLUETOOTH_MAC]
+
+Without an address, scan for nearby devices.
+With an address, run the standard polling set and print merged parsed state as JSON.
+`;
 
 async function main(): Promise<void> {
-  const [, , address] = process.argv;
+  const argv = process.argv.slice(2);
+  if (hasHelpFlag(argv)) {
+    throw new HelpError(HELP_TEXT);
+  }
+
+  const address = optionalSingleAddressArg(argv, HELP_TEXT);
   if (!address) {
     const client = new WindowsHelperClient();
     try {
@@ -38,8 +57,4 @@ async function main(): Promise<void> {
   console.log(JSON.stringify(payload, null, 2));
 }
 
-void main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.stack ?? error.message : String(error);
-  console.error(message);
-  process.exitCode = 1;
-});
+runCli(main);

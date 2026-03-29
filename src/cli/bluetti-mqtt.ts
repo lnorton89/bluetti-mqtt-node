@@ -2,14 +2,31 @@
 
 import { WindowsHelperClient, createWindowsHelperRuntime } from "../bluetooth/helper-client.js";
 import { BluettiMqttServer } from "../app/server.js";
+import { HelpError, installSignalHandlers, runCli, UsageError } from "./shared.js";
+
+const HELP_TEXT = `Usage: bluetti-mqtt-node --broker <mqtt-url> [options] <BLUETOOTH_MAC...>
+
+Options:
+  --broker <mqtt-url>   MQTT broker URL, for example mqtt://127.0.0.1:1883
+  --username <value>    MQTT username
+  --password <value>    MQTT password
+  --interval <seconds>  Poll interval in seconds for continuous mode
+  --once                Poll and publish once, then exit
+  -h, --help            Show this help text
+`;
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
+  if (args.help) {
+    throw new HelpError(HELP_TEXT);
+  }
+
   if (!args.brokerUrl || args.addresses.length === 0) {
-    throw new Error("Usage: node dist/cli/bluetti-mqtt.js --broker mqtt://host:1883 <BLUETOOTH_MAC...>");
+    throw new UsageError(HELP_TEXT);
   }
 
   const helper = new WindowsHelperClient();
+  let removeSignalHandlers: (() => void) | undefined;
   try {
     const runtime = createWindowsHelperRuntime(helper);
     const mqttOptions: {
@@ -32,9 +49,15 @@ async function main(): Promise<void> {
       mqtt: mqttOptions,
     });
 
+    removeSignalHandlers = installSignalHandlers(async () => {
+      console.error("Stopping bluetti-mqtt-node...");
+      await server.stop();
+    });
+
     console.log(`Starting bluetti-mqtt-node for ${args.addresses.join(", ")} -> ${args.brokerUrl}`);
     await server.run();
   } finally {
+    removeSignalHandlers?.();
     helper.dispose();
   }
 }
@@ -46,6 +69,7 @@ function parseArgs(argv: readonly string[]): {
   intervalMs: number;
   runOnce: boolean;
   addresses: string[];
+  help: boolean;
 } {
   const addresses: string[] = [];
   let brokerUrl: string | undefined;
@@ -53,24 +77,29 @@ function parseArgs(argv: readonly string[]): {
   let password: string | undefined;
   let intervalMs = 0;
   let runOnce = false;
+  let help = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
     switch (token) {
+      case "-h":
+      case "--help":
+        help = true;
+        break;
       case "--broker":
-        brokerUrl = argv[index + 1];
+        brokerUrl = requireValue(argv, index, HELP_TEXT);
         index += 1;
         break;
       case "--username":
-        username = argv[index + 1];
+        username = requireValue(argv, index, HELP_TEXT);
         index += 1;
         break;
       case "--password":
-        password = argv[index + 1];
+        password = requireValue(argv, index, HELP_TEXT);
         index += 1;
         break;
       case "--interval":
-        intervalMs = Number(argv[index + 1] ?? "0") * 1000;
+        intervalMs = parseIntervalSeconds(requireValue(argv, index, HELP_TEXT), HELP_TEXT);
         index += 1;
         break;
       case "--once":
@@ -84,11 +113,25 @@ function parseArgs(argv: readonly string[]): {
     }
   }
 
-  return { brokerUrl, username, password, intervalMs, runOnce, addresses };
+  return { brokerUrl, username, password, intervalMs, runOnce, addresses, help };
 }
 
-void main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.stack ?? error.message : String(error);
-  console.error(message);
-  process.exitCode = 1;
-});
+runCli(main);
+
+function requireValue(argv: readonly string[], index: number, helpText: string): string {
+  const value = argv[index + 1];
+  if (value === undefined || value.startsWith("--")) {
+    throw new UsageError(helpText);
+  }
+
+  return value;
+}
+
+function parseIntervalSeconds(rawValue: string, helpText: string): number {
+  const seconds = Number(rawValue);
+  if (!Number.isFinite(seconds) || seconds < 0) {
+    throw new UsageError(helpText);
+  }
+
+  return seconds * 1000;
+}

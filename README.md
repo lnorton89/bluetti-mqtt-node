@@ -170,6 +170,8 @@ npm run bluetti-discovery
 
 This scans nearby BLE devices through the Windows helper and prints discovered devices as JSON.
 
+Use `--help` with any CLI to print its usage text.
+
 ### Probe a Device
 
 ```powershell
@@ -299,14 +301,6 @@ npm run pack:dry-run
 npm run validate
 dotnet build helper\BluettiMqtt.BluetoothHelper\BluettiMqtt.BluetoothHelper.csproj
 ```
-
-## Repository Status
-
-For the agreed Windows-first, MQTT-only scope, the planned porting work is complete.
-
-Future enhancements that may still be useful for distribution:
-
-- deeper integration with `bluetti-monitor`
 
 ## Distribution Notes
 
