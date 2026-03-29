@@ -50,7 +50,7 @@ The project is split into a few clear layers:
 - `src/devices`
   - device models and typed field parsing
 - `src/bluetooth`
-  - transport abstraction, session state machine, helper client, mock transport
+  - Windows-helper transport abstraction, session state machine, helper client, mock transport
 - `src/app`
   - polling orchestration and runtime wiring
 - `src/mqtt`
@@ -62,7 +62,7 @@ The project is split into a few clear layers:
 
 ## Why a Windows Helper Exists
 
-Node-native BLE libraries on Windows are workable in some environments, but they tend to be more fragile than the native Windows Bluetooth stack and often require native addon toolchains. This project uses a small .NET helper process instead.
+Node-native BLE libraries on Windows are workable in some environments, but they tend to be more fragile than the native Windows Bluetooth stack and often require native addon toolchains. This project uses a small .NET helper process instead, and the old experimental `noble` path has been removed from the supported runtime surface.
 
 That gives us:
 
@@ -222,9 +222,11 @@ npm run bluetti-mqtt -- --broker mqtt://127.0.0.1:1883 --interval 5 <BLUETOOTH_M
 Supported flags:
 
 - `--broker <mqtt-url>`
+- `--config <path>`
 - `--username <username>`
 - `--password <password>`
 - `--interval <seconds>`
+- `--log-level <level>`
 - `--once`
 
 Example:
@@ -232,6 +234,24 @@ Example:
 ```powershell
 npm run bluetti-mqtt -- --broker mqtt://127.0.0.1:1883 --interval 5 24:4C:AB:2C:24:8E
 ```
+
+Config-file example:
+
+```powershell
+npm run bluetti-mqtt -- --config .\config.example.json
+```
+
+The config file is JSON and supports:
+
+- `broker`
+- `username`
+- `password`
+- `interval`
+- `once`
+- `logLevel`
+- `addresses`
+
+CLI flags override config-file values when both are provided.
 
 ## MQTT Topic Layout
 
@@ -284,7 +304,7 @@ Successful live validation includes:
 ## Limitations
 
 - Windows is the only runtime this repository is currently designed for.
-- The Windows helper is the production BLE path; the optional `noble` experiment is not the recommended runtime.
+- The Windows helper is the only supported BLE runtime path in this repository.
 - MQTT command handling is implemented, but broader live validation of writable fields is still lighter than read-path validation.
 
 ## Development Notes
@@ -301,6 +321,12 @@ npm run pack:dry-run
 npm run validate
 dotnet build helper\BluettiMqtt.BluetoothHelper\BluettiMqtt.BluetoothHelper.csproj
 ```
+
+GitHub Actions validates:
+
+- `npm run typecheck`
+- `npm test`
+- `npm run helper:build`
 
 ## Distribution Notes
 

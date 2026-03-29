@@ -106,7 +106,7 @@ export function requireSingleAddressArg(argv: readonly string[], helpText: strin
     throw new UsageError(helpText);
   }
 
-  return argv[0];
+  return validateBluetoothAddress(argv[0]);
 }
 
 export function optionalSingleAddressArg(argv: readonly string[], helpText: string): string | undefined {
@@ -118,7 +118,7 @@ export function optionalSingleAddressArg(argv: readonly string[], helpText: stri
     throw new UsageError(helpText);
   }
 
-  return argv[0];
+  return argv[0] ? validateBluetoothAddress(argv[0]) : undefined;
 }
 
 export function runCli(main: () => Promise<void>): void {
@@ -164,4 +164,26 @@ export function installSignalHandlers(onSignal: () => void | Promise<void>): () 
     process.off("SIGINT", handler);
     process.off("SIGTERM", handler);
   };
+}
+
+export function validateBluetoothAddress(address: string): string {
+  const normalized = address.trim().toUpperCase();
+  const patterns = [
+    /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/,
+    /^([0-9A-F]{2}-){5}[0-9A-F]{2}$/,
+    /^[0-9A-F]{12}$/,
+  ];
+
+  if (!patterns.some((pattern) => pattern.test(normalized))) {
+    throw new UsageError(
+      `Invalid Bluetooth address '${address}'. Expected 12 hex digits, for example 24:4C:AB:2C:24:8E.`,
+    );
+  }
+
+  if (normalized.includes(":")) {
+    return normalized;
+  }
+
+  const compact = normalized.replace(/-/g, "");
+  return compact.match(/.{2}/g)?.join(":") ?? normalized;
 }

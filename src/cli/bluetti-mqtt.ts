@@ -1,22 +1,27 @@
 #!/usr/bin/env node
 
+import { readFile } from "node:fs/promises";
 import { WindowsHelperClient, createWindowsHelperRuntime } from "../bluetooth/helper-client.js";
 import { BluettiMqttServer } from "../app/server.js";
-import { HelpError, installSignalHandlers, runCli, UsageError } from "./shared.js";
+import { ConsoleLogger, type LogLevel } from "../core/logger.js";
+import { HelpError, installSignalHandlers, runCli, UsageError, validateBluetoothAddress } from "./shared.js";
 
 const HELP_TEXT = `Usage: bluetti-mqtt-node --broker <mqtt-url> [options] <BLUETOOTH_MAC...>
+       bluetti-mqtt-node --config <path>
 
 Options:
   --broker <mqtt-url>   MQTT broker URL, for example mqtt://127.0.0.1:1883
+  --config <path>       Read runtime options from a JSON config file
   --username <value>    MQTT username
   --password <value>    MQTT password
   --interval <seconds>  Poll interval in seconds for continuous mode
+  --log-level <level>   debug, info, warn, or error
   --once                Poll and publish once, then exit
   -h, --help            Show this help text
 `;
 
 async function main(): Promise<void> {
-  const args = parseArgs(process.argv.slice(2));
+  const args = await parseArgs(process.argv.slice(2));
   if (args.help) {
     throw new HelpError(HELP_TEXT);
   }
@@ -25,6 +30,7 @@ async function main(): Promise<void> {
     throw new UsageError(HELP_TEXT);
   }
 
+  const logger = new ConsoleLogger(args.logLevel);
   const helper = new WindowsHelperClient();
   let removeSignalHandlers: (() => void) | undefined;
   try {
@@ -47,14 +53,20 @@ async function main(): Promise<void> {
       intervalMs: args.intervalMs,
       runOnce: args.runOnce,
       mqtt: mqttOptions,
+      logger,
     });
 
     removeSignalHandlers = installSignalHandlers(async () => {
-      console.error("Stopping bluetti-mqtt-node...");
+      logger.info("Stopping bluetti-mqtt-node");
       await server.stop();
     });
 
-    console.log(`Starting bluetti-mqtt-node for ${args.addresses.join(", ")} -> ${args.brokerUrl}`);
+    logger.info("Starting bluetti-mqtt-node", {
+      addresses: args.addresses,
+      brokerUrl: args.brokerUrl,
+      intervalMs: args.intervalMs,
+      runOnce: args.runOnce,
+    });
     await server.run();
   } finally {
     removeSignalHandlers?.();
@@ -62,7 +74,17 @@ async function main(): Promise<void> {
   }
 }
 
-function parseArgs(argv: readonly string[]): {
+interface CliConfigFile {
+  readonly broker?: string;
+  readonly username?: string;
+  readonly password?: string;
+  readonly interval?: number;
+  readonly once?: boolean;
+  readonly addresses?: readonly string[];
+  readonly logLevel?: LogLevel;
+}
+
+async function parseArgs(argv: readonly string[]): Promise<{
   brokerUrl: string | undefined;
   username: string | undefined;
   password: string | undefined;
@@ -70,7 +92,8 @@ function parseArgs(argv: readonly string[]): {
   runOnce: boolean;
   addresses: string[];
   help: boolean;
-} {
+  logLevel: LogLevel;
+}> {
   const addresses: string[] = [];
   let brokerUrl: string | undefined;
   let username: string | undefined;
@@ -78,6 +101,8 @@ function parseArgs(argv: readonly string[]): {
   let intervalMs = 0;
   let runOnce = false;
   let help = false;
+  let configPath: string | undefined;
+  let logLevel: LogLevel = "info";
 
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
@@ -88,6 +113,10 @@ function parseArgs(argv: readonly string[]): {
         break;
       case "--broker":
         brokerUrl = requireValue(argv, index, HELP_TEXT);
+        index += 1;
+        break;
+      case "--config":
+        configPath = requireValue(argv, index, HELP_TEXT);
         index += 1;
         break;
       case "--username":
@@ -102,18 +131,35 @@ function parseArgs(argv: readonly string[]): {
         intervalMs = parseIntervalSeconds(requireValue(argv, index, HELP_TEXT), HELP_TEXT);
         index += 1;
         break;
+      case "--log-level":
+        logLevel = parseLogLevel(requireValue(argv, index, HELP_TEXT), HELP_TEXT);
+        index += 1;
+        break;
       case "--once":
         runOnce = true;
         break;
       default:
         if (token) {
-          addresses.push(token);
+          addresses.push(validateBluetoothAddress(token));
         }
         break;
     }
   }
 
-  return { brokerUrl, username, password, intervalMs, runOnce, addresses, help };
+  if (configPath !== undefined) {
+    const config = await readConfigFile(configPath);
+    brokerUrl = brokerUrl ?? config.broker;
+    username = username ?? config.username;
+    password = password ?? config.password;
+    intervalMs = intervalMs > 0 ? intervalMs : (config.interval ?? 0) * 1000;
+    runOnce = runOnce || config.once === true;
+    logLevel = logLevel !== "info" ? logLevel : (config.logLevel ?? "info");
+    if (addresses.length === 0 && config.addresses !== undefined) {
+      addresses.push(...config.addresses.map((address) => validateBluetoothAddress(address)));
+    }
+  }
+
+  return { brokerUrl, username, password, intervalMs, runOnce, addresses, help, logLevel };
 }
 
 runCli(main);
@@ -134,4 +180,34 @@ function parseIntervalSeconds(rawValue: string, helpText: string): number {
   }
 
   return seconds * 1000;
+}
+
+function parseLogLevel(rawValue: string, helpText: string): LogLevel {
+  if (rawValue === "debug" || rawValue === "info" || rawValue === "warn" || rawValue === "error") {
+    return rawValue;
+  }
+
+  throw new UsageError(helpText);
+}
+
+async function readConfigFile(path: string): Promise<CliConfigFile> {
+  let raw: string;
+  try {
+    raw = await readFile(path, "utf8");
+  } catch {
+    throw new UsageError(`Failed to read config file '${path}'.`);
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new UsageError(`Config file '${path}' must be valid JSON.`);
+  }
+
+  if (typeof parsed !== "object" || parsed === null) {
+    throw new UsageError(`Config file '${path}' must contain a JSON object.`);
+  }
+
+  return parsed as CliConfigFile;
 }
