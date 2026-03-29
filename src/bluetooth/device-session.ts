@@ -1,5 +1,5 @@
 import { DeviceCommand } from "../core/commands.js";
-import { BadConnectionError, ModbusError, ParseError } from "./errors.js";
+import { BadConnectionError, CommandTimeoutError, ModbusError, ParseError } from "./errors.js";
 import type { BluetoothTransport } from "./transport.js";
 
 export enum DeviceSessionState {
@@ -12,6 +12,7 @@ export enum DeviceSessionState {
 }
 
 export class DeviceSession {
+  static readonly DEFAULT_COMMAND_TIMEOUT_MS = 10_000;
   static readonly WRITE_UUID = "0000ff02-0000-1000-8000-00805f9b34fb";
   static readonly NOTIFY_UUID = "0000ff01-0000-1000-8000-00805f9b34fb";
   static readonly DEVICE_NAME_UUID = "00002a00-0000-1000-8000-00805f9b34fb";
@@ -28,8 +29,13 @@ export class DeviceSession {
         reject: (reason?: unknown) => void;
       }
     | null = null;
+  private pendingTimeout: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(address: string, transport: BluetoothTransport) {
+  constructor(
+    address: string,
+    transport: BluetoothTransport,
+    private readonly commandTimeoutMs = DeviceSession.DEFAULT_COMMAND_TIMEOUT_MS,
+  ) {
     this.address = address;
     this.transport = transport;
   }
@@ -51,6 +57,13 @@ export class DeviceSession {
     this.state = DeviceSessionState.Ready;
   }
 
+  async disconnect(): Promise<void> {
+    this.clearPendingState();
+    this.state = DeviceSessionState.Disconnecting;
+    await this.transport.disconnect();
+    this.state = DeviceSessionState.NotConnected;
+  }
+
   async perform(command: DeviceCommand): Promise<Uint8Array> {
     if (!this.isReady) {
       throw new BadConnectionError(`Device ${this.address} is not ready`);
@@ -62,6 +75,12 @@ export class DeviceSession {
 
     const responsePromise = new Promise<Uint8Array>((resolve, reject) => {
       this.pendingResponse = { resolve, reject };
+      this.pendingTimeout = setTimeout(() => {
+        this.state = DeviceSessionState.CommandErrorWait;
+        this.rejectPending(new CommandTimeoutError(
+          `Timed out waiting for response from ${this.address} after ${this.commandTimeoutMs} ms`,
+        ));
+      }, this.commandTimeoutMs);
     });
 
     try {
@@ -69,14 +88,17 @@ export class DeviceSession {
     } catch (error) {
       this.state = DeviceSessionState.Disconnecting;
       this.pendingResponse?.reject(error);
-      this.pendingResponse = null;
+      this.clearPendingState();
       throw error;
     }
 
-    const response = await responsePromise;
-    this.state = DeviceSessionState.Ready;
-    this.currentCommand = null;
-    return response;
+    try {
+      const response = await responsePromise;
+      this.state = DeviceSessionState.Ready;
+      return response;
+    } finally {
+      this.clearPendingState();
+    }
   }
 
   buildModbusException(command: DeviceCommand, response: Uint8Array): ModbusError {
@@ -121,12 +143,22 @@ export class DeviceSession {
 
   private resolvePending(response: Uint8Array): void {
     this.pendingResponse?.resolve(response);
-    this.pendingResponse = null;
+    this.clearPendingState();
   }
 
   private rejectPending(error: unknown): void {
     this.pendingResponse?.reject(error);
+    this.clearPendingState();
+  }
+
+  private clearPendingState(): void {
+    if (this.pendingTimeout !== null) {
+      clearTimeout(this.pendingTimeout);
+      this.pendingTimeout = null;
+    }
     this.pendingResponse = null;
+    this.currentCommand = null;
+    this.responseBuffer = new Uint8Array(0);
   }
 }
 

@@ -35,6 +35,7 @@ export class BluettiMqttServer {
     try {
       await this.deviceHandler.run();
     } finally {
+      await this.manager.disconnectAll();
       await this.mqttBridge.stop();
     }
   }

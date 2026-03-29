@@ -40,4 +40,11 @@ export class MultiDeviceManager {
     }
     return session;
   }
+
+  async disconnectAll(): Promise<void> {
+    for (const [address, session] of this.sessions.entries()) {
+      await session.disconnect();
+      this.sessions.delete(address);
+    }
+  }
 }

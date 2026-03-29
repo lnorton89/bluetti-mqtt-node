@@ -29,15 +29,12 @@
     "artifacts/helper/win-x64/BluettiMqtt.BluetoothHelper.exe",
     "helper/README.md",
     "LICENSE",
-    "README.md",
-    "PORTING_PLAN.md"
+    "README.md"
   ],
   "bin": {
     "bluetti-mqtt-node": "./dist/cli/bluetti-mqtt.js",
     "bluetti-mqtt-node-discovery": "./dist/cli/bluetti-discovery.js",
     "bluetti-mqtt-node-logger": "./dist/cli/bluetti-logger.js",
-    "bluetti-mqtt-node-parity": "./dist/cli/parity-check.js",
-    "bluetti-mqtt-node-parity-suite": "./dist/cli/parity-suite.js",
     "bluetti-mqtt-node-poll": "./dist/cli/poll.js",
     "bluetti-mqtt-node-probe": "./dist/cli/probe.js"
   },
@@ -51,8 +48,6 @@
     "helper:publish": "npm run helper:publish:self-contained",
     "helper:publish:portable": "dotnet publish helper\\BluettiMqtt.BluetoothHelper\\BluettiMqtt.BluetoothHelper.csproj -c Release -r win-x64 --self-contained false /p:PublishSingleFile=true /p:PublishTrimmed=false /p:DebugType=None /p:DebugSymbols=false -o artifacts\\helper\\win-x64-fdd",
     "helper:publish:self-contained": "dotnet publish helper\\BluettiMqtt.BluetoothHelper\\BluettiMqtt.BluetoothHelper.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:PublishTrimmed=false /p:DebugType=None /p:DebugSymbols=false -o artifacts\\helper\\win-x64",
-    "parity": "node ./dist/cli/parity-check.js",
-    "parity:suite": "node ./dist/cli/parity-suite.js",
     "pack:dry-run": "npm pack --dry-run",
     "poll": "node ./dist/cli/poll.js",
     "prepack": "npm run build && npm run helper:publish",
