@@ -1,4 +1,4 @@
-import { BadConnectionError, ModbusError, ParseError } from "../bluetooth/errors.js";
+import { BadConnectionError, CommandTimeoutError, ModbusError, ParseError } from "../bluetooth/errors.js";
 import { MultiDeviceManager } from "../bluetooth/manager.js";
 import { DeviceCommand, ReadHoldingRegisters } from "../core/commands.js";
 import { EventBus, type CommandMessage } from "../core/event-bus.js";
@@ -7,6 +7,7 @@ import type { BluettiDevice } from "../devices/device.js";
 
 export class DeviceHandler {
   private readonly devices = new Map<string, BluettiDevice>();
+  private commandListenerAttached = false;
 
   constructor(
     private readonly manager: MultiDeviceManager,
@@ -17,9 +18,12 @@ export class DeviceHandler {
 
   async connectAll(): Promise<void> {
     await this.manager.connectAll();
-    this.bus.addCommandListener(async (message) => {
-      await this.handleCommand(message);
-    });
+    if (!this.commandListenerAttached) {
+      this.bus.addCommandListener(async (message) => {
+        await this.handleCommand(message);
+      });
+      this.commandListenerAttached = true;
+    }
 
     for (const address of this.manager.addresses) {
       if (!this.devices.has(address)) {
@@ -96,7 +100,8 @@ export class DeviceHandler {
       }
     } catch (error) {
       if (
-        error instanceof ModbusError
+        error instanceof CommandTimeoutError
+        || error instanceof ModbusError
         || error instanceof ParseError
         || error instanceof BadConnectionError
       ) {

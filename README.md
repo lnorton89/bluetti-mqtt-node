@@ -13,8 +13,7 @@ The repository is designed around Windows as the primary runtime. BLE access is 
 - Typed field parsing for supported Bluetti devices
 - MQTT state publishing
 - MQTT command-topic ingestion for writable fields
-- Live polling, logging, probe, and parity-check CLIs
-- Cross-check tooling against the original Python implementation
+- Live polling, logging, and probe CLIs
 
 ## Scope
 
@@ -23,7 +22,6 @@ Included:
 - Windows runtime
 - MQTT bridge
 - BLE polling and command dispatch
-- Python parity validation utilities
 
 Explicitly out of scope:
 
@@ -88,7 +86,6 @@ Runtime requirements:
 
 Development requirements:
 
-- Python 3.x if you want to run the Python parity tooling
 - Docker optional, but useful for spinning up a local MQTT broker for testing
 
 ## Installation
@@ -136,8 +133,6 @@ If this package is installed as a CLI package, the declared executable names are
 - `bluetti-mqtt-node`
 - `bluetti-mqtt-node-discovery`
 - `bluetti-mqtt-node-logger`
-- `bluetti-mqtt-node-parity`
-- `bluetti-mqtt-node-parity-suite`
 - `bluetti-mqtt-node-poll`
 - `bluetti-mqtt-node-probe`
 
@@ -207,26 +202,6 @@ npm run bluetti-logger -- <BLUETOOTH_MAC>
 ```
 
 This runs the broader `loggingCommands` set for the device and prints the parsed output.
-
-### Single-Command Python Parity Check
-
-```powershell
-npm run parity -- <BLUETOOTH_MAC>
-```
-
-This:
-
-- performs a live poll through the Windows helper
-- runs the same response through the original Python library
-- compares command bytes and parsed output
-
-### Full Polling-Suite Python Parity Check
-
-```powershell
-npm run parity:suite -- <BLUETOOTH_MAC>
-```
-
-This compares the full device polling command set against the Python implementation.
 
 ### Run the MQTT Bridge Once
 
@@ -302,20 +277,12 @@ Successful live validation includes:
 - characteristic read/write/subscribe path
 - `probe`
 - `poll`
-- `parity`
-- `parity:suite`
 - one-shot MQTT publish to a local broker
-
-For the AC500 polling command set, the TypeScript port currently matches the Python implementation for:
-
-- command bytes
-- parsed output
 
 ## Limitations
 
 - Windows is the only runtime this repository is currently designed for.
 - The Windows helper is the production BLE path; the optional `noble` experiment is not the recommended runtime.
-- Live parity coverage is strongest for AC500 because that is the device used during implementation.
 - MQTT command handling is implemented, but broader live validation of writable fields is still lighter than read-path validation.
 
 ## Development Notes
@@ -333,19 +300,12 @@ npm run validate
 dotnet build helper\BluettiMqtt.BluetoothHelper\BluettiMqtt.BluetoothHelper.csproj
 ```
 
-If you want to use a different Python executable for parity tooling, set:
-
-```powershell
-$env:BLUETTI_PYTHON = "python.bat"
-```
-
 ## Repository Status
 
 For the agreed Windows-first, MQTT-only scope, the planned porting work is complete.
 
 Future enhancements that may still be useful for distribution:
 
-- more live parity validation on non-AC500 devices
 - deeper integration with `bluetti-monitor`
 
 ## Distribution Notes

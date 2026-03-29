@@ -10,7 +10,6 @@ Windows BLE support is handled here through .NET / WinRT so the Node side can st
 - device models
 - polling
 - MQTT
-- parity tooling
 
 ## Transport Contract
 
