@@ -39,3 +39,25 @@ It has been verified live against an AC500 for:
 - device-name reads
 - characteristic reads/writes
 - notification delivery for the MODBUS session layer
+
+## Build and Publish
+
+Build from source:
+
+```powershell
+dotnet build helper\BluettiMqtt.BluetoothHelper\BluettiMqtt.BluetoothHelper.csproj
+```
+
+Publish the helper as a self-contained single-file Windows executable:
+
+```powershell
+npm run helper:publish
+```
+
+That writes the release artifact to:
+
+```text
+artifacts/helper/win-x64/BluettiMqtt.BluetoothHelper.exe
+```
+
+The Node runtime prefers that published executable when it exists, and falls back to `dotnet run` from source during development.

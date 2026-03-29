@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { normalizeValue, runPollingCommands, withConnectedDevice } from "./shared.js";
 
 async function main(): Promise<void> {

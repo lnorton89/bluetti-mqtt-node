@@ -82,7 +82,7 @@ Runtime requirements:
 - Windows
 - Node.js 22+ recommended
 - npm
-- .NET SDK 6.0+ for building/running the Windows helper
+- .NET SDK 6.0+ if you are building the Windows helper from source
 - Bluetooth adapter supported by Windows BLE APIs
 - MQTT broker reachable from the machine running this project
 
@@ -111,6 +111,12 @@ Build the Windows helper:
 dotnet build helper\BluettiMqtt.BluetoothHelper\BluettiMqtt.BluetoothHelper.csproj
 ```
 
+Publish a self-contained Windows helper for distribution:
+
+```powershell
+npm run helper:publish
+```
+
 Run the full local validation suite:
 
 ```powershell
@@ -124,10 +130,32 @@ If this package is installed as a CLI package, the declared executable names are
 - `bluetti-mqtt-node`
 - `bluetti-mqtt-node-discovery`
 - `bluetti-mqtt-node-logger`
+- `bluetti-mqtt-node-parity`
+- `bluetti-mqtt-node-parity-suite`
 - `bluetti-mqtt-node-poll`
 - `bluetti-mqtt-node-probe`
 
 The repo-local `npm run ...` scripts remain the easiest way to use the commands during development.
+
+## Helper Resolution
+
+The Node runtime resolves the Windows helper in this order:
+
+1. `BLUETTI_HELPER_PATH` if you set it
+2. published helper artifact at `artifacts/helper/win-x64/BluettiMqtt.BluetoothHelper.exe`
+3. source fallback through `dotnet run --project helper/BluettiMqtt.BluetoothHelper/BluettiMqtt.BluetoothHelper.csproj`
+
+That means:
+
+- contributors can work directly from source without changing anything
+- release builds can ship a published helper executable
+- end users can override the helper path explicitly when needed
+
+Example override:
+
+```powershell
+$env:BLUETTI_HELPER_PATH = "C:\tools\BluettiMqtt.BluetoothHelper.exe"
+```
 
 ## CLI Usage
 
@@ -290,6 +318,8 @@ Useful commands:
 npm run typecheck
 npm test
 npm run build
+npm run helper:publish
+npm run pack:dry-run
 npm run validate
 dotnet build helper\BluettiMqtt.BluetoothHelper\BluettiMqtt.BluetoothHelper.csproj
 ```
@@ -306,6 +336,25 @@ For the agreed Windows-first, MQTT-only scope, the planned porting work is compl
 
 Future enhancements that may still be useful for distribution:
 
-- packaged helper release/bundling story so end users do not need a full .NET SDK
 - more live parity validation on non-AC500 devices
 - deeper integration with `bluetti-monitor`
+
+## Distribution Notes
+
+For npm packaging, `prepack` builds the TypeScript output and publishes a self-contained Windows helper into `artifacts/helper/win-x64`.
+
+That gives the package a better installation story than requiring every user to run the helper from source. A typical release flow is:
+
+```powershell
+npm run validate
+npm run pack:dry-run
+npm publish
+```
+
+If you are distributing outside npm, the simplest layout is:
+
+- `dist/`
+- `artifacts/helper/win-x64/BluettiMqtt.BluetoothHelper.exe`
+- `README.md`
+
+The CLI will automatically use the published helper artifact when it exists.

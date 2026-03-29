@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { WindowsHelperClient, createWindowsHelperRuntime } from "../bluetooth/helper-client.js";
 import { normalizeValue, runPollingCommands, withConnectedDevice } from "./shared.js";
 
