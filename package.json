@@ -29,7 +29,8 @@
     "artifacts/helper/win-x64/BluettiMqtt.BluetoothHelper.exe",
     "helper/README.md",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "config.example.json"
   ],
   "bin": {
     "bluetti-mqtt-node": "./dist/cli/bluetti-mqtt.js",
@@ -55,7 +56,7 @@
     "rebuild": "npm run clean && npm run build",
     "validate": "npm run typecheck && npm test && npm run helper:build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node test/device-session.test.mjs"
+    "test": "npm run build && node test/run-all.mjs"
   },
   "dependencies": {
     "mqtt": "^5.15.1"

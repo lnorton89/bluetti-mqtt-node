@@ -1,0 +1,11 @@
+{
+  "broker": "mqtt://127.0.0.1:1883",
+  "username": "optional-user",
+  "password": "optional-password",
+  "interval": 5,
+  "once": false,
+  "logLevel": "info",
+  "addresses": [
+    "24:4C:AB:2C:24:8E"
+  ]
+}

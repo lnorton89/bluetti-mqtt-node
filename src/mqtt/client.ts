@@ -1,6 +1,7 @@
 import { connectAsync, type MqttClient as RawMqttClient } from "mqtt";
 import { ReadHoldingRegisters, type DeviceCommand } from "../core/commands.js";
 import type { EventBus, ParserMessage, CommandMessage } from "../core/event-bus.js";
+import { ConsoleLogger, type Logger } from "../core/logger.js";
 import type { DeviceEnumValue } from "../core/types.js";
 import type { BluettiDevice } from "../devices/device.js";
 
@@ -28,13 +29,27 @@ export interface BluettiMqttClientOptions {
   readonly password?: string;
 }
 
+export interface RawMqttClientLike {
+  subscribe(topic: string): Promise<unknown> | unknown;
+  on(event: "message", listener: (topic: string, payload: Buffer) => void): unknown;
+  publish(topic: string, payload: string): Promise<unknown> | unknown;
+  endAsync(): Promise<unknown>;
+}
+
+export type MqttConnector = (
+  url: string,
+  options: { username?: string; password?: string },
+) => Promise<RawMqttClientLike>;
+
 export class BluettiMqttBridge {
   private readonly devices = new Map<string, BluettiDevice>();
-  private rawClient: RawMqttClient | null = null;
+  private rawClient: RawMqttClientLike | null = null;
 
   constructor(
     private readonly bus: EventBus<BluettiDevice, BluettiDevice, DeviceCommand>,
     private readonly options: BluettiMqttClientOptions,
+    private readonly connector: MqttConnector = defaultMqttConnector,
+    private readonly logger: Logger = new ConsoleLogger("info"),
   ) {}
 
   async run(): Promise<void> {
@@ -46,7 +61,8 @@ export class BluettiMqttBridge {
       connectOptions.password = this.options.password;
     }
 
-    this.rawClient = await connectAsync(this.options.url, connectOptions);
+    this.rawClient = await this.connector(this.options.url, connectOptions);
+    this.logger.info("Connected to MQTT broker", { url: this.options.url });
 
     this.bus.addParserListener(async (message) => {
       await this.handleParserMessage(message);
@@ -56,14 +72,22 @@ export class BluettiMqttBridge {
     });
 
     await this.rawClient.subscribe("bluetti/command/#");
+    this.logger.info("Subscribed to MQTT command topics", { topic: "bluetti/command/#" });
     this.rawClient.on("message", (topic, payload) => {
-      void this.handleIncomingCommand(topic, new Uint8Array(payload));
+      void this.handleIncomingCommand(topic, new Uint8Array(payload)).catch((error: unknown) => {
+        // Invalid command payloads and unsupported setters should not crash the long-running bridge.
+        this.logger.warn("Ignoring invalid MQTT command payload", {
+          topic,
+          error: stringifyError(error),
+        });
+      });
     });
   }
 
   async stop(): Promise<void> {
     if (this.rawClient !== null) {
       await this.rawClient.endAsync();
+      this.logger.info("Disconnected from MQTT broker", { url: this.options.url });
       this.rawClient = null;
     }
   }
@@ -101,10 +125,16 @@ export class BluettiMqttBridge {
     const decoded = Buffer.from(payload).toString("utf8").trim();
     const value = parseCommandValue(decoded);
     const command = device.buildSetterCommand(fieldName, value);
+    this.logger.info("Dispatching MQTT command", {
+      topic,
+      device: deviceKey(device),
+      fieldName,
+      value,
+    });
     await this.bus.publishCommandMessage({ device, command } as CommandMessage<BluettiDevice, DeviceCommand>);
   }
 
-  private requireClient(): RawMqttClient {
+  private requireClient(): RawMqttClientLike {
     if (this.rawClient === null) {
       throw new Error("MQTT bridge is not connected");
     }
@@ -133,6 +163,13 @@ export class BasicMqttClient implements MqttClient {
     this.callbacks.set(topic, onMessage);
     await this.rawClient.subscribeAsync(topic);
   }
+}
+
+async function defaultMqttConnector(
+  url: string,
+  options: { username?: string; password?: string },
+): Promise<RawMqttClientLike> {
+  return connectAsync(url, options) as unknown as RawMqttClient;
 }
 
 function serializeValue(value: unknown): string {
@@ -199,3 +236,10 @@ function deviceKey(device: BluettiDevice): string {
 }
 
 export type PollingCommand = ReadHoldingRegisters;
+
+function stringifyError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
