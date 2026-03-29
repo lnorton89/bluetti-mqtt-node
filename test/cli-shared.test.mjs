@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { promisify } from "node:util";
 import {
   HelpError,
@@ -21,6 +24,8 @@ async function run() {
   await testMqttCliHelp();
   await testMqttCliMissingBroker();
   await testMqttCliInvalidInterval();
+  await testMqttCliConfigHelp();
+  await testMqttCliInvalidConfigJson();
   console.log("cli shared smoke test passed");
 }
 
@@ -79,6 +84,36 @@ async function testMqttCliInvalidInterval() {
     }),
   );
   assert.match(error.stderr, /Usage: bluetti-mqtt-node/);
+}
+
+async function testMqttCliConfigHelp() {
+  const result = await execFileAsync("node", [
+    ".\\dist\\cli\\bluetti-mqtt.js",
+    "--config",
+    ".\\config.example.json",
+    "--help",
+  ], {
+    cwd: process.cwd(),
+  });
+  assert.match(result.stdout, /Usage: bluetti-mqtt-node/);
+}
+
+async function testMqttCliInvalidConfigJson() {
+  const tempDir = await mkdtemp(join(tmpdir(), "bluetti-mqtt-node-"));
+  const configPath = join(tempDir, "bad-config.json");
+  await writeFile(configPath, "{not-valid-json", "utf8");
+
+  const error = await captureExecError(
+    execFileAsync("node", [
+      ".\\dist\\cli\\bluetti-mqtt.js",
+      "--config",
+      configPath,
+      "--help",
+    ], {
+      cwd: process.cwd(),
+    }),
+  );
+  assert.match(error.stderr, /must be valid JSON/);
 }
 
 async function captureExecError(promise) {

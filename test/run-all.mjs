@@ -5,3 +5,4 @@ await import("./struct.test.mjs");
 await import("./cli-shared.test.mjs");
 await import("./device-handler.test.mjs");
 await import("./helper-client.test.mjs");
+await import("./logger.test.mjs");
