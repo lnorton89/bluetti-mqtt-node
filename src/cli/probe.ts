@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { DeviceSession } from "../bluetooth/device-session.js";
 import { WindowsHelperClient, createWindowsHelperRuntime } from "../bluetooth/helper-client.js";
 import { ReadHoldingRegisters } from "../core/commands.js";

@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { ReadHoldingRegisters } from "../core/commands.js";
 import { normalizeValue, withConnectedDevice } from "./shared.js";
 import { dirname, join } from "node:path";

@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { WindowsHelperClient, createWindowsHelperRuntime } from "../bluetooth/helper-client.js";
 
 async function main(): Promise<void> {

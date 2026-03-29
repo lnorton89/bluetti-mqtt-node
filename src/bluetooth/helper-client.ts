@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { dirname, resolve } from "node:path";
 import { createInterface } from "node:readline";
+import { fileURLToPath } from "node:url";
 import type {
   BluetoothDiscovery,
   BluetoothRuntime,
@@ -16,12 +19,21 @@ import type {
   HelperScanDevice,
 } from "./helper-protocol.js";
 
-const DEFAULT_HELPER_COMMAND = [
-  "dotnet",
-  "run",
-  "--project",
-  "helper/BluettiMqtt.BluetoothHelper/BluettiMqtt.BluetoothHelper.csproj",
-];
+const MODULE_DIRECTORY = dirname(fileURLToPath(import.meta.url));
+const PACKAGE_ROOT = resolve(MODULE_DIRECTORY, "..", "..");
+const PUBLISHED_HELPER_PATH = resolve(
+  PACKAGE_ROOT,
+  "artifacts",
+  "helper",
+  "win-x64",
+  "BluettiMqtt.BluetoothHelper.exe",
+);
+const SOURCE_HELPER_PROJECT = resolve(
+  PACKAGE_ROOT,
+  "helper",
+  "BluettiMqtt.BluetoothHelper",
+  "BluettiMqtt.BluetoothHelper.csproj",
+);
 
 export class WindowsHelperClient implements BluetoothDiscovery {
   private readonly process: ChildProcessWithoutNullStreams;
@@ -30,7 +42,7 @@ export class WindowsHelperClient implements BluetoothDiscovery {
   private readonly ready: Promise<void>;
   private readyResolved = false;
 
-  constructor(command = DEFAULT_HELPER_COMMAND) {
+  constructor(command = resolveDefaultHelperCommand()) {
     const [file, ...args] = command;
     if (file === undefined) {
       throw new Error("Helper command cannot be empty");
@@ -199,6 +211,24 @@ export class WindowsHelperClient implements BluetoothDiscovery {
       pending.reject(new Error(`${message.error.code}: ${message.error.message}`));
     }
   }
+}
+
+function resolveDefaultHelperCommand(): readonly string[] {
+  const helperOverride = process.env.BLUETTI_HELPER_PATH?.trim();
+  if (helperOverride) {
+    return [helperOverride];
+  }
+
+  if (existsSync(PUBLISHED_HELPER_PATH)) {
+    return [PUBLISHED_HELPER_PATH];
+  }
+
+  return [
+    "dotnet",
+    "run",
+    "--project",
+    SOURCE_HELPER_PROJECT,
+  ];
 }
 
 export function createWindowsHelperRuntime(client = new WindowsHelperClient()): BluetoothRuntime {
