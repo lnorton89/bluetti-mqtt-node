@@ -117,6 +117,12 @@ Publish a self-contained Windows helper for distribution:
 npm run helper:publish
 ```
 
+Publish a smaller framework-dependent helper instead:
+
+```powershell
+npm run helper:publish:portable
+```
+
 Run the full local validation suite:
 
 ```powershell
@@ -156,6 +162,8 @@ Example override:
 ```powershell
 $env:BLUETTI_HELPER_PATH = "C:\tools\BluettiMqtt.BluetoothHelper.exe"
 ```
+
+If you publish the framework-dependent helper, point `BLUETTI_HELPER_PATH` at `artifacts/helper/win-x64-fdd/BluettiMqtt.BluetoothHelper.exe`.
 
 ## CLI Usage
 
@@ -319,6 +327,7 @@ npm run typecheck
 npm test
 npm run build
 npm run helper:publish
+npm run helper:publish:portable
 npm run pack:dry-run
 npm run validate
 dotnet build helper\BluettiMqtt.BluetoothHelper\BluettiMqtt.BluetoothHelper.csproj
@@ -358,3 +367,18 @@ If you are distributing outside npm, the simplest layout is:
 - `README.md`
 
 The CLI will automatically use the published helper artifact when it exists.
+
+## Helper Size Tradeoff
+
+There are two practical helper distribution modes:
+
+- self-contained single-file publish
+  - biggest artifact
+  - no separate .NET runtime install required on the target machine
+  - this is the default npm package artifact
+- framework-dependent single-file publish
+  - much smaller artifact
+  - requires a compatible .NET runtime on the target machine
+  - useful when you control the installation environment
+
+On the current implementation, the framework-dependent helper is roughly one quarter the size of the self-contained helper.
