@@ -23,5 +23,6 @@ pnpm-debug.log*
 
 coverage/
 *.tsbuildinfo
+*.tgz
 tmp/
 temp/

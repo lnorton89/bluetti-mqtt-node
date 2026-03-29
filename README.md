@@ -111,6 +111,24 @@ Build the Windows helper:
 dotnet build helper\BluettiMqtt.BluetoothHelper\BluettiMqtt.BluetoothHelper.csproj
 ```
 
+Run the full local validation suite:
+
+```powershell
+npm run validate
+```
+
+## Installed CLI Names
+
+If this package is installed as a CLI package, the declared executable names are:
+
+- `bluetti-mqtt-node`
+- `bluetti-mqtt-node-discovery`
+- `bluetti-mqtt-node-logger`
+- `bluetti-mqtt-node-poll`
+- `bluetti-mqtt-node-probe`
+
+The repo-local `npm run ...` scripts remain the easiest way to use the commands during development.
+
 ## CLI Usage
 
 ### Discover Nearby Devices
@@ -272,6 +290,7 @@ Useful commands:
 npm run typecheck
 npm test
 npm run build
+npm run validate
 dotnet build helper\BluettiMqtt.BluetoothHelper\BluettiMqtt.BluetoothHelper.csproj
 ```
 
@@ -287,7 +306,6 @@ For the agreed Windows-first, MQTT-only scope, the planned porting work is compl
 
 Future enhancements that may still be useful for distribution:
 
-- npm `bin` metadata for nicer CLI installation
-- packaged helper distribution story
+- packaged helper release/bundling story so end users do not need a full .NET SDK
 - more live parity validation on non-AC500 devices
 - deeper integration with `bluetti-monitor`

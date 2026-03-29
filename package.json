@@ -1,28 +1,63 @@
 {
   "name": "bluetti-mqtt-node",
   "version": "0.1.0",
-  "private": true,
-  "description": "Windows-first TypeScript port of bluetti_mqtt",
+  "description": "Windows-first TypeScript Bluetti BLE to MQTT bridge with a native Windows helper",
+  "license": "MIT",
+  "keywords": [
+    "bluetti",
+    "mqtt",
+    "bluetooth",
+    "ble",
+    "windows",
+    "typescript",
+    "modbus"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "helper",
+    "README.md",
+    "PORTING_PLAN.md"
+  ],
+  "bin": {
+    "bluetti-mqtt-node": "./dist/cli/bluetti-mqtt.js",
+    "bluetti-mqtt-node-discovery": "./dist/cli/bluetti-discovery.js",
+    "bluetti-mqtt-node-logger": "./dist/cli/bluetti-logger.js",
+    "bluetti-mqtt-node-poll": "./dist/cli/poll.js",
+    "bluetti-mqtt-node-probe": "./dist/cli/probe.js"
+  },
   "scripts": {
     "bluetti-discovery": "node ./dist/cli/bluetti-discovery.js",
     "bluetti-logger": "node ./dist/cli/bluetti-logger.js",
     "bluetti-mqtt": "node ./dist/cli/bluetti-mqtt.js",
     "build": "tsc -p tsconfig.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "helper:build": "dotnet build helper\\BluettiMqtt.BluetoothHelper\\BluettiMqtt.BluetoothHelper.csproj",
     "parity": "node ./dist/cli/parity-check.js",
     "parity:suite": "node ./dist/cli/parity-suite.js",
     "poll": "node ./dist/cli/poll.js",
     "probe": "node ./dist/cli/probe.js",
+    "rebuild": "npm run clean && npm run build",
+    "validate": "npm run typecheck && npm test && npm run helper:build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && node test/device-session.test.mjs"
   },
   "dependencies": {
-    "mqtt": "^5.14.1"
+    "mqtt": "^5.15.1"
   },
   "devDependencies": {
-    "@types/node": "^24.6.0",
-    "typescript": "^5.9.3"
+    "@types/node": "^25.5.0",
+    "typescript": "^6.0.2"
   }
 }
