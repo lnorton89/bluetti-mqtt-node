@@ -1,0 +1,28 @@
+{
+  "name": "bluetti-mqtt-node",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Windows-first TypeScript port of bluetti_mqtt",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "bluetti-discovery": "node ./dist/cli/bluetti-discovery.js",
+    "bluetti-logger": "node ./dist/cli/bluetti-logger.js",
+    "bluetti-mqtt": "node ./dist/cli/bluetti-mqtt.js",
+    "build": "tsc -p tsconfig.json",
+    "parity": "node ./dist/cli/parity-check.js",
+    "parity:suite": "node ./dist/cli/parity-suite.js",
+    "poll": "node ./dist/cli/poll.js",
+    "probe": "node ./dist/cli/probe.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node test/device-session.test.mjs"
+  },
+  "dependencies": {
+    "mqtt": "^5.14.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "typescript": "^5.9.3"
+  }
+}
