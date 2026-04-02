@@ -25,6 +25,14 @@ export abstract class BluettiDevice {
 
   abstract get pollingCommands(): readonly ReadHoldingRegisters[];
 
+  get fastPollingCommands(): readonly ReadHoldingRegisters[] {
+    return this.pollingCommands.slice(0, 1);
+  }
+
+  get slowPollingCommands(): readonly ReadHoldingRegisters[] {
+    return this.pollingCommands.slice(this.fastPollingCommands.length);
+  }
+
   get packPollingCommands(): readonly ReadHoldingRegisters[] {
     return [];
   }

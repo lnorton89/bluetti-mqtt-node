@@ -1,5 +1,5 @@
 import { DeviceCommand } from "../core/commands.js";
-import { BadConnectionError, CommandTimeoutError, ModbusError, ParseError } from "./errors.js";
+import { BadConnectionError, CommandTimeoutError, DeviceBusyError, ModbusError, ParseError } from "./errors.js";
 import type { BluetoothTransport } from "./transport.js";
 
 export enum DeviceSessionState {
@@ -82,6 +82,10 @@ export class DeviceSession {
         ));
       }, this.commandTimeoutMs);
     });
+    // Notifications can reject the pending promise before we reach the await below.
+    // Attach a handler immediately so expected device-busy responses do not surface
+    // as top-level unhandled rejections in the host runtime.
+    void responsePromise.catch(() => {});
 
     try {
       await this.transport.writeCharacteristic(DeviceSession.WRITE_UUID, command.toBytes());
@@ -102,7 +106,11 @@ export class DeviceSession {
   }
 
   buildModbusException(command: DeviceCommand, response: Uint8Array): ModbusError {
-    return new ModbusError(`MODBUS exception for function ${command.functionCode}: code ${response[2] ?? -1}`);
+    const code = response[2] ?? -1;
+    if (code === 5) {
+      return new DeviceBusyError(`MODBUS exception for function ${command.functionCode}: code ${code}`, code);
+    }
+    return new ModbusError(`MODBUS exception for function ${command.functionCode}: code ${code}`, code);
   }
 
   private handleNotification(data: Uint8Array): void {

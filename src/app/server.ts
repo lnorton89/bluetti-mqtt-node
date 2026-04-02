@@ -5,13 +5,14 @@ import { EventBus } from "../core/event-bus.js";
 import { ConsoleLogger, type Logger } from "../core/logger.js";
 import type { BluettiDevice } from "../devices/device.js";
 import { BluettiMqttBridge, type BluettiMqttClientOptions } from "../mqtt/client.js";
-import { DeviceHandler } from "./device-handler.js";
+import { DeviceHandler, type PollingOptions } from "./device-handler.js";
 
 export interface ServerOptions {
   readonly addresses: readonly string[];
   readonly transportFactory: BluetoothTransportFactory;
   readonly mqtt: BluettiMqttClientOptions;
   readonly intervalMs?: number;
+  readonly polling?: PollingOptions;
   readonly runOnce?: boolean;
   readonly logger?: Logger;
 }
@@ -26,7 +27,13 @@ export class BluettiMqttServer {
   constructor(options: ServerOptions) {
     this.logger = options.logger ?? new ConsoleLogger("info");
     this.manager = new MultiDeviceManager(options.addresses, options.transportFactory);
-    this.deviceHandler = new DeviceHandler(this.manager, this.bus, options.intervalMs ?? 0, options.runOnce ?? false);
+    this.deviceHandler = new DeviceHandler(
+      this.manager,
+      this.bus,
+      options.polling ?? options.intervalMs ?? 0,
+      options.runOnce ?? false,
+      this.logger,
+    );
     this.mqttBridge = new BluettiMqttBridge(this.bus, options.mqtt, undefined, this.logger);
   }
 
