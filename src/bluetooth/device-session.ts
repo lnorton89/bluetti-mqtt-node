@@ -82,6 +82,10 @@ export class DeviceSession {
         ));
       }, this.commandTimeoutMs);
     });
+    // Notifications can reject the pending promise before we reach the await below.
+    // Attach a handler immediately so expected device-busy responses do not surface
+    // as top-level unhandled rejections in the host runtime.
+    void responsePromise.catch(() => {});
 
     try {
       await this.transport.writeCharacteristic(DeviceSession.WRITE_UUID, command.toBytes());

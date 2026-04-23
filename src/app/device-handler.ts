@@ -48,6 +48,8 @@ interface DeviceTelemetry {
   lastCycleCompletedAt: string | null;
   lastBusyAt: string | null;
   lastErrorAt: string | null;
+  lastBusyWarningAtMs: number;
+  suppressedBusyWarningCount: number;
   lastSummaryAtMs: number;
 }
 
@@ -65,6 +67,7 @@ const DEFAULT_POLLING_OPTIONS: Required<PollingOptions> = {
 };
 
 const TELEMETRY_SUMMARY_INTERVAL_MS = 60_000;
+const BUSY_WARNING_INTERVAL_MS = 60_000;
 
 export class DeviceHandler {
   private readonly devices = new Map<string, BluettiDevice>();
@@ -169,13 +172,7 @@ export class DeviceHandler {
             applyBusyBackoff(state, this.defaultPollingOptions);
             telemetry.busyErrorCount += 1;
             telemetry.lastBusyAt = new Date().toISOString();
-            this.logger.warn("Device reported busy during pack polling; backing off", {
-              address,
-              fastIntervalMs: state.fastIntervalMs,
-              fullIntervalMs: state.fullIntervalMs,
-              commandDelayMs: state.commandDelayMs,
-              telemetry: summarizeTelemetry(telemetry),
-            });
+            this.maybeLogBusyWarning(address, state, telemetry, "pack polling");
           } else {
             recoverPollingState(state, this.defaultPollingOptions);
           }
@@ -183,13 +180,7 @@ export class DeviceHandler {
           applyBusyBackoff(state, this.defaultPollingOptions);
           telemetry.busyErrorCount += 1;
           telemetry.lastBusyAt = new Date().toISOString();
-          this.logger.warn("Device reported busy during polling; backing off", {
-            address,
-            fastIntervalMs: state.fastIntervalMs,
-            fullIntervalMs: state.fullIntervalMs,
-            commandDelayMs: state.commandDelayMs,
-            telemetry: summarizeTelemetry(telemetry),
-          });
+          this.maybeLogBusyWarning(address, state, telemetry, "polling");
         } else {
           recoverPollingState(state, this.defaultPollingOptions);
         }
@@ -424,6 +415,31 @@ export class DeviceHandler {
     });
   }
 
+  private maybeLogBusyWarning(
+    address: string,
+    state: DevicePollingState,
+    telemetry: DeviceTelemetry,
+    phase: "polling" | "pack polling",
+  ): void {
+    const now = Date.now();
+    if (now - telemetry.lastBusyWarningAtMs < BUSY_WARNING_INTERVAL_MS) {
+      telemetry.suppressedBusyWarningCount += 1;
+      return;
+    }
+
+    const suppressedCount = telemetry.suppressedBusyWarningCount;
+    telemetry.lastBusyWarningAtMs = now;
+    telemetry.suppressedBusyWarningCount = 0;
+    this.logger.warn(`Device reported busy during ${phase}; backing off`, {
+      address,
+      fastIntervalMs: state.fastIntervalMs,
+      fullIntervalMs: state.fullIntervalMs,
+      commandDelayMs: state.commandDelayMs,
+      suppressedBusyWarnings: suppressedCount,
+      telemetry: summarizeTelemetry(telemetry),
+    });
+  }
+
   private async enqueueDeviceWork<T>(address: string, work: () => Promise<T>): Promise<T> {
     const previous = this.deviceQueues.get(address) ?? Promise.resolve();
     let release!: () => void;
@@ -521,6 +537,8 @@ function createDeviceTelemetry(): DeviceTelemetry {
     lastCycleCompletedAt: null,
     lastBusyAt: null,
     lastErrorAt: null,
+    lastBusyWarningAtMs: 0,
+    suppressedBusyWarningCount: 0,
     lastSummaryAtMs: 0,
   };
 }
