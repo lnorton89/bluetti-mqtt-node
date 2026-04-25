@@ -41,6 +41,7 @@ export class WindowsHelperClient implements BluetoothDiscovery {
   private readonly notificationListeners = new Set<(event: HelperNotification) => void>();
   private readonly ready: Promise<void>;
   private readyResolved = false;
+  private disposeRequested = false;
 
   constructor(command = resolveDefaultHelperCommand()) {
     const [file, ...args] = command;
@@ -60,6 +61,14 @@ export class WindowsHelperClient implements BluetoothDiscovery {
       });
       this.process.once("error", reject);
       this.process.once("exit", (code) => {
+        if (this.disposeRequested) {
+          if (!this.readyResolved) {
+            reject(new Error("Windows BLE helper was disposed before becoming ready"));
+          }
+          this.pending.clear();
+          return;
+        }
+
         const error = new Error(`Windows BLE helper exited with code ${code ?? -1}`);
         if (!this.readyResolved) {
           reject(error);
@@ -141,10 +150,22 @@ export class WindowsHelperClient implements BluetoothDiscovery {
   }
 
   dispose(): void {
-    this.process.kill();
+    this.disposeRequested = true;
+    for (const pending of this.pending.values()) {
+      pending.reject(new Error("Windows BLE helper disposed"));
+    }
+    this.pending.clear();
+
+    if (!this.process.killed) {
+      this.process.kill();
+    }
   }
 
   private async request(command: string, argumentsObject?: Record<string, unknown>): Promise<Record<string, unknown> | undefined> {
+    if (this.disposeRequested) {
+      throw new Error("Windows BLE helper disposed");
+    }
+
     await this.waitUntilReady();
 
     const id = randomUUID();
