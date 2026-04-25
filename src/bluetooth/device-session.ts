@@ -13,6 +13,8 @@ export enum DeviceSessionState {
 
 export class DeviceSession {
   static readonly DEFAULT_COMMAND_TIMEOUT_MS = 10_000;
+  static readonly CONNECT_RETRY_COUNT = 3;
+  static readonly CONNECT_RETRY_DELAY_MS = 1_000;
   static readonly WRITE_UUID = "0000ff02-0000-1000-8000-00805f9b34fb";
   static readonly NOTIFY_UUID = "0000ff01-0000-1000-8000-00805f9b34fb";
   static readonly DEVICE_NAME_UUID = "00002a00-0000-1000-8000-00805f9b34fb";
@@ -45,16 +47,46 @@ export class DeviceSession {
   }
 
   async connectAndInitialize(): Promise<void> {
-    await this.transport.connect(this.address);
-    this.state = DeviceSessionState.Connected;
+    let lastError: unknown = null;
 
-    const rawName = await this.transport.readCharacteristic(DeviceSession.DEVICE_NAME_UUID);
-    this.name = Buffer.from(rawName).toString("ascii");
+    for (let attempt = 0; attempt < DeviceSession.CONNECT_RETRY_COUNT; attempt += 1) {
+      try {
+        await this.transport.connect(this.address);
+        this.state = DeviceSessionState.Connected;
 
-    await this.transport.subscribe(DeviceSession.NOTIFY_UUID, (data) => {
-      this.handleNotification(data);
-    });
-    this.state = DeviceSessionState.Ready;
+        const rawName = await this.transport.readCharacteristic(DeviceSession.DEVICE_NAME_UUID);
+        this.name = Buffer.from(rawName).toString("ascii");
+
+        await this.transport.subscribe(DeviceSession.NOTIFY_UUID, (data) => {
+          this.handleNotification(data);
+        });
+        this.state = DeviceSessionState.Ready;
+        return;
+      } catch (error) {
+        lastError = error;
+        this.clearPendingState();
+        this.state = DeviceSessionState.NotConnected;
+        this.name = null;
+
+        try {
+          await this.transport.disconnect();
+        } catch {
+          // Best effort cleanup before retrying initialization.
+        }
+
+        const shouldRetry = attempt < DeviceSession.CONNECT_RETRY_COUNT - 1
+          && isRetryableInitializationError(error);
+        if (!shouldRetry) {
+          throw error;
+        }
+
+        await sleep(DeviceSession.CONNECT_RETRY_DELAY_MS);
+      }
+    }
+
+    throw lastError instanceof Error
+      ? lastError
+      : new Error(`Failed to initialize Bluetooth session for ${this.address}`);
   }
 
   async disconnect(): Promise<void> {
@@ -168,6 +200,20 @@ export class DeviceSession {
     this.currentCommand = null;
     this.responseBuffer = new Uint8Array(0);
   }
+}
+
+function isRetryableInitializationError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLowerCase();
+  return normalized.includes("enumerate gatt services: unreachable")
+    || normalized.includes("failed to enumerate gatt services: unreachable")
+    || normalized.includes("unreachable");
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 function concatBytes(left: Uint8Array, right: Uint8Array): Uint8Array<ArrayBufferLike> {
