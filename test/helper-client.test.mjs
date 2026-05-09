@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { BadConnectionError } from "../dist/bluetooth/errors.js";
 import { WindowsHelperClient } from "../dist/bluetooth/helper-client.js";
 
 await run();
@@ -6,6 +7,7 @@ await run();
 async function run() {
   testNotificationRouting();
   testErrorMapping();
+  testDisposedObjectErrorMapping();
   testMalformedJsonBeforeReady();
   console.log("helper client smoke test passed");
 }
@@ -63,6 +65,34 @@ function testErrorMapping() {
 
   assert.equal(errors.length, 1);
   assert.match(String(errors[0]), /command_failed: bad address/);
+}
+
+function testDisposedObjectErrorMapping() {
+  const client = makeClientHarness();
+  const errors = [];
+  client.pending.set("request-1", {
+    resolve: () => {},
+    reject: (error) => {
+      errors.push(error);
+    },
+  });
+
+  client.handleLine(
+    JSON.stringify({
+      type: "error",
+      id: "request-1",
+      error: {
+        code: "command_failed",
+        message: "Cannot access a disposed object.",
+      },
+    }),
+    () => {},
+    () => {},
+  );
+
+  assert.equal(errors.length, 1);
+  assert.ok(errors[0] instanceof BadConnectionError);
+  assert.match(String(errors[0]), /command_failed: Cannot access a disposed object/);
 }
 
 function testMalformedJsonBeforeReady() {
