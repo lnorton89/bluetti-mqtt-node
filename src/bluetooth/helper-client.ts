@@ -18,6 +18,7 @@ import type {
   HelperRequest,
   HelperScanDevice,
 } from "./helper-protocol.js";
+import { BadConnectionError } from "./errors.js";
 
 const MODULE_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = resolve(MODULE_DIRECTORY, "..", "..");
@@ -229,9 +230,22 @@ export class WindowsHelperClient implements BluetoothDiscovery {
     if (message.type === "response") {
       pending.resolve(message.payload);
     } else {
-      pending.reject(new Error(`${message.error.code}: ${message.error.message}`));
+      pending.reject(createHelperError(message.error.code, message.error.message));
     }
   }
+}
+
+function createHelperError(code: string, message: string): Error {
+  const details = `${code}: ${message}`;
+  if (isDisposedBluetoothObjectError(code, message)) {
+    return new BadConnectionError(details);
+  }
+
+  return new Error(details);
+}
+
+function isDisposedBluetoothObjectError(code: string, message: string): boolean {
+  return code === "command_failed" && message.toLowerCase().includes("cannot access a disposed object");
 }
 
 function resolveDefaultHelperCommand(): readonly string[] {
