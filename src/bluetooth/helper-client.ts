@@ -237,15 +237,24 @@ export class WindowsHelperClient implements BluetoothDiscovery {
 
 function createHelperError(code: string, message: string): Error {
   const details = `${code}: ${message}`;
-  if (isDisposedBluetoothObjectError(code, message)) {
+  if (isRecoverableBluetoothConnectionError(code, message)) {
     return new BadConnectionError(details);
   }
 
   return new Error(details);
 }
 
-function isDisposedBluetoothObjectError(code: string, message: string): boolean {
-  return code === "command_failed" && message.toLowerCase().includes("cannot access a disposed object");
+function isRecoverableBluetoothConnectionError(code: string, message: string): boolean {
+  if (code !== "command_failed") {
+    return false;
+  }
+
+  const normalizedMessage = message.toLowerCase();
+  return normalizedMessage.includes("cannot access a disposed object")
+    || (
+      normalizedMessage.includes("failed to enumerate gatt services")
+      && normalizedMessage.includes("unreachable")
+    );
 }
 
 function resolveDefaultHelperCommand(): readonly string[] {

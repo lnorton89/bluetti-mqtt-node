@@ -8,6 +8,7 @@ async function run() {
   testNotificationRouting();
   testErrorMapping();
   testDisposedObjectErrorMapping();
+  testGattUnreachableErrorMapping();
   testMalformedJsonBeforeReady();
   console.log("helper client smoke test passed");
 }
@@ -93,6 +94,34 @@ function testDisposedObjectErrorMapping() {
   assert.equal(errors.length, 1);
   assert.ok(errors[0] instanceof BadConnectionError);
   assert.match(String(errors[0]), /command_failed: Cannot access a disposed object/);
+}
+
+function testGattUnreachableErrorMapping() {
+  const client = makeClientHarness();
+  const errors = [];
+  client.pending.set("request-1", {
+    resolve: () => {},
+    reject: (error) => {
+      errors.push(error);
+    },
+  });
+
+  client.handleLine(
+    JSON.stringify({
+      type: "error",
+      id: "request-1",
+      error: {
+        code: "command_failed",
+        message: "Failed to enumerate GATT services: Unreachable.",
+      },
+    }),
+    () => {},
+    () => {},
+  );
+
+  assert.equal(errors.length, 1);
+  assert.ok(errors[0] instanceof BadConnectionError);
+  assert.match(String(errors[0]), /command_failed: Failed to enumerate GATT services: Unreachable/);
 }
 
 function testMalformedJsonBeforeReady() {
