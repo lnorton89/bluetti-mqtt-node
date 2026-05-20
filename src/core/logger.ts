@@ -48,7 +48,12 @@ export class ConsoleLogger implements Logger {
     }
 
     const line = JSON.stringify(payload);
-    if (level === "warn" || level === "error") {
+    if (level === "warn") {
+      console.warn(line);
+      return;
+    }
+
+    if (level === "error") {
       console.error(line);
       return;
     }
