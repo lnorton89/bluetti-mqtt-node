@@ -73,10 +73,14 @@ function testBigIntContextNormalization() {
 
 function withCapturedConsole(stdout, stderr, callback) {
   const originalLog = console.log;
+  const originalWarn = console.warn;
   const originalError = console.error;
 
   console.log = (line) => {
     stdout.push(String(line));
+  };
+  console.warn = (line) => {
+    stderr.push(String(line));
   };
   console.error = (line) => {
     stderr.push(String(line));
@@ -86,6 +90,7 @@ function withCapturedConsole(stdout, stderr, callback) {
     return callback();
   } finally {
     console.log = originalLog;
+    console.warn = originalWarn;
     console.error = originalError;
   }
 }
