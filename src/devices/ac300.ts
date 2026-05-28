@@ -61,6 +61,9 @@ function buildAc300Struct(): DeviceStruct {
     .addDecimalField("internal_current_three", 78, 1, [0, 100] as const)
     .addUintField("internal_power_three", 79)
     .addDecimalField("ac_input_frequency", 80, 2)
+    .addDecimalField("aux_dc_voltage", 83, 1)
+    .addDecimalField("aux_dc_current", 84, 1)
+    .addUintField("aux_dc_power", 85)
     .addDecimalField("internal_dc_input_voltage", 86, 1)
     .addUintField("internal_dc_input_power", 87)
     .addDecimalField("internal_dc_input_current", 88, 1, [0, 15] as const)
@@ -73,6 +76,10 @@ function buildAc300Struct(): DeviceStruct {
     .addUintField("pack_battery_percent", 99)
     .addDecimalArrayField("cell_voltages", 105, 16, 2)
     .addVersionField("pack_bms_version", 201)
+    .addDecimalField("dc_input_1_voltage", 163, 1)
+    .addUintField("dc_input_1_power", 165)
+    .addDecimalField("dc_input_2_voltage", 170, 1)
+    .addUintField("dc_input_2_power", 172)
     .addEnumField("ups_mode", 3001, AC300UpsMode)
     .addBoolField("split_phase_on", 3004)
     .addEnumField("split_phase_machine_mode", 3005, AC300MachineAddress)
@@ -99,7 +106,8 @@ export class AC300 extends BluettiDevice {
   override get pollingCommands(): readonly ReadHoldingRegisters[] {
     return [
       new ReadHoldingRegisters(10, 40),
-      new ReadHoldingRegisters(70, 21),
+      new ReadHoldingRegisters(70, 90),
+      new ReadHoldingRegisters(160, 46),
       new ReadHoldingRegisters(3001, 61),
     ];
   }
@@ -111,7 +119,8 @@ export class AC300 extends BluettiDevice {
   override get loggingCommands(): readonly ReadHoldingRegisters[] {
     return [
       new ReadHoldingRegisters(0, 70),
-      new ReadHoldingRegisters(70, 21),
+      new ReadHoldingRegisters(70, 90),
+      new ReadHoldingRegisters(160, 46),
       new ReadHoldingRegisters(3000, 62),
     ];
   }
