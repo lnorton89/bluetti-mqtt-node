@@ -68,6 +68,7 @@ const DEFAULT_POLLING_OPTIONS: Required<PollingOptions> = {
 
 const TELEMETRY_SUMMARY_INTERVAL_MS = 60_000;
 const BUSY_WARNING_INTERVAL_MS = 60_000;
+const STARTUP_RETRY_DELAY_MS = 5_000;
 
 export class DeviceHandler {
   private readonly devices = new Map<string, BluettiDevice>();
@@ -131,7 +132,10 @@ export class DeviceHandler {
 
   async run(): Promise<void> {
     this.stopRequested = false;
-    await this.connectAll();
+    const connected = await this.connectAllWithRecovery();
+    if (!connected) {
+      return;
+    }
 
     await Promise.all(this.manager.addresses.map(async (address) => {
       const device = this.devices.get(address);
@@ -214,6 +218,27 @@ export class DeviceHandler {
         }
       }
     }));
+  }
+
+  private async connectAllWithRecovery(): Promise<boolean> {
+    while (!this.stopRequested) {
+      try {
+        await this.connectAll();
+        return true;
+      } catch (error) {
+        if (this.runOnce || !(error instanceof BadConnectionError)) {
+          throw error;
+        }
+
+        this.logger.warn("Bluetooth startup failed; retrying", {
+          error: formatError(error),
+          retryInMs: STARTUP_RETRY_DELAY_MS,
+        });
+        await this.sleep(STARTUP_RETRY_DELAY_MS);
+      }
+    }
+
+    return false;
   }
 
   stop(): void {
@@ -541,6 +566,10 @@ function createDeviceTelemetry(): DeviceTelemetry {
     suppressedBusyWarningCount: 0,
     lastSummaryAtMs: 0,
   };
+}
+
+function formatError(error: Error): string {
+  return error.message || error.name;
 }
 
 function summarizeTelemetry(telemetry: DeviceTelemetry): Record<string, unknown> {

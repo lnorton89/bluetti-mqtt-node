@@ -15,6 +15,8 @@ import {
 async function run() {
   await testPublishesParsedMessages();
   await testSwallowsExpectedReadErrors();
+  await testRetriesRecoverableStartupErrorsUntilStopped();
+  await testRunOncePropagatesRecoverableStartupErrors();
   await testStopInterruptsSleep();
   console.log("device handler smoke test passed");
 }
@@ -62,6 +64,31 @@ async function testSwallowsExpectedReadErrors() {
     await handler.pollOnce("00:11:22:33:44:55");
     assert.equal(published.length, 0);
   }
+}
+
+async function testRetriesRecoverableStartupErrorsUntilStopped() {
+  const manager = new FailingConnectManager(new BadConnectionError("command_failed: Cannot access a disposed object."));
+  const logger = new CapturingLogger();
+  const handler = new DeviceHandler(manager, new EventBus(), 10_000, false, logger);
+
+  const runPromise = handler.run();
+  await flushAsync();
+  await flushAsync();
+  handler.stop();
+  await runPromise;
+
+  assert.equal(manager.connectAttempts, 1);
+  assert.equal(logger.warnings.length, 1);
+  assert.equal(logger.warnings[0].message, "Bluetooth startup failed; retrying");
+  assert.equal(logger.warnings[0].context.error, "command_failed: Cannot access a disposed object.");
+}
+
+async function testRunOncePropagatesRecoverableStartupErrors() {
+  const error = new BadConnectionError("command_failed: Cannot access a disposed object.");
+  const manager = new FailingConnectManager(error);
+  const handler = new DeviceHandler(manager, new EventBus(), 0, true);
+
+  await assert.rejects(handler.run(), error);
 }
 
 function createTestDevice() {
@@ -114,6 +141,20 @@ class FakeManager {
   }
 }
 
+class FailingConnectManager extends FakeManager {
+  connectAttempts = 0;
+
+  constructor(errorToThrow) {
+    super({});
+    this.errorToThrow = errorToThrow;
+  }
+
+  async connectAll() {
+    this.connectAttempts += 1;
+    throw this.errorToThrow;
+  }
+}
+
 class FakeSession {
   constructor(responsesByAddress, errorToThrow) {
     this.responsesByAddress = responsesByAddress;
@@ -143,6 +184,20 @@ class TestBluettiDevice extends BluettiDevice {
   get loggingCommands() {
     return [new ReadHoldingRegisters(10, 3)];
   }
+}
+
+class CapturingLogger {
+  warnings = [];
+
+  debug() {}
+
+  info() {}
+
+  warn(message, context) {
+    this.warnings.push({ message, context });
+  }
+
+  error() {}
 }
 
 await run();
