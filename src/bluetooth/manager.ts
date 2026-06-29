@@ -42,9 +42,20 @@ export class MultiDeviceManager {
   }
 
   async disconnectAll(): Promise<void> {
+    const failures: Error[] = [];
+
     for (const [address, session] of this.sessions.entries()) {
-      await session.disconnect();
-      this.sessions.delete(address);
+      try {
+        await session.disconnect();
+      } catch (error) {
+        failures.push(error instanceof Error ? error : new Error(String(error)));
+      } finally {
+        this.sessions.delete(address);
+      }
+    }
+
+    if (failures.length > 0) {
+      throw new AggregateError(failures, "Failed to disconnect one or more Bluetooth sessions");
     }
   }
 }

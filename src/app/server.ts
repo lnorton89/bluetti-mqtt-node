@@ -51,9 +51,23 @@ export class BluettiMqttServer {
     try {
       await this.deviceHandler.run();
     } finally {
-      await this.manager.disconnectAll();
+      try {
+        await this.manager.disconnectAll();
+      } catch (error) {
+        this.logger.warn("Bluetooth cleanup failed", { error: formatError(error) });
+      }
       await this.mqttBridge.stop();
       this.logger.info("Stopped device polling", { addresses: this.manager.addresses });
     }
   }
+}
+
+function formatError(error: unknown): string {
+  if (error instanceof AggregateError) {
+    return error.errors
+      .map((entry) => entry instanceof Error ? entry.message : String(entry))
+      .join("; ");
+  }
+
+  return error instanceof Error ? error.message || error.name : String(error);
 }
