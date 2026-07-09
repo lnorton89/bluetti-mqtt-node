@@ -12,6 +12,7 @@ import {
 	type IClientOptions,
 	type MqttClient as RawMqttClient,
 } from "mqtt";
+import { buildMqttConnectionOptions } from "./connection-options.js";
 import {
 	BOOLEAN_OFF_VALUE,
 	BOOLEAN_ON_VALUE,
@@ -188,32 +189,10 @@ export class BluettiMqttBridge {
 			throw new Error("MQTT bridge is already running");
 		}
 
-		const connectOptions: IClientOptions = {};
-		if (this.options.username !== undefined) {
-			connectOptions.username = this.options.username;
-		}
-		if (this.options.password !== undefined) {
-			connectOptions.password = this.options.password;
-		}
-		if (this.options.tls !== undefined) {
-			if (this.options.tls.ca !== undefined) {
-				connectOptions.ca = this.options.tls.ca;
-			}
-			if (this.options.tls.cert !== undefined) {
-				connectOptions.cert = this.options.tls.cert;
-			}
-			if (this.options.tls.key !== undefined) {
-				connectOptions.key = this.options.tls.key;
-			}
-			if (this.options.tls.rejectUnauthorized !== undefined) {
-				connectOptions.rejectUnauthorized = this.options.tls.rejectUnauthorized;
-			}
-			if (this.options.tls.servername !== undefined) {
-				connectOptions.servername = this.options.tls.servername;
-			}
-		}
-
-		const client = await this.connector(this.options.url, connectOptions);
+		const client = await this.connector(
+			this.options.url,
+			buildMqttConnectionOptions(this.options),
+		);
 		this.rawClient = client;
 		this.logger.info("Connected to MQTT broker", { url: this.options.url });
 

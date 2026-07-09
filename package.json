@@ -28,6 +28,8 @@
     "dist",
     "artifacts/helper/win-x64/BluettiMqtt.BluetoothHelper.exe",
     "helper/README.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
     "LICENSE",
     "README.md",
     "config.example.json"
@@ -56,7 +58,7 @@
     "lint": "biome check src/",
     "lint:fix": "biome check --write --unsafe src/",
     "rebuild": "npm run clean && npm run build",
-    "validate": "npm run typecheck && npm run lint && npm test && npm run helper:build",
+    "validate": "npm run typecheck && npm run lint && npm test && npm run coverage && npm run helper:build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && node test/run-all.mjs",
     "coverage": "npm run build && c8 node test/run-all.mjs"

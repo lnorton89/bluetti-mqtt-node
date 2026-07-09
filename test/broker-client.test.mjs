@@ -7,6 +7,7 @@ import {
 import { EventBus } from "../dist/core/event-bus.js";
 import { BluettiDevice } from "../dist/devices/device.js";
 import { DeviceStruct } from "../dist/devices/struct.js";
+import { buildMqttConnectionOptions } from "../dist/broker/connection-options.js";
 import { BasicMqttClient, BluettiMqttBridge } from "../dist/broker/client.js";
 
 /**
@@ -18,6 +19,7 @@ import { BasicMqttClient, BluettiMqttBridge } from "../dist/broker/client.js";
  * rollback on subscription failure, and async callback error reporting.
  */
 async function run() {
+	testBuildsConnectionOptions();
 	await testPassesTlsOptionsToConnector();
 	await testPublishesStateTopics();
 	await testDispatchesIncomingCommand();
@@ -27,6 +29,34 @@ async function run() {
 	await testStartupSubscriptionFailureRollsBackBridge();
 	await testBasicClientReportsAsyncCallbackFailures();
 	console.log("mqtt bridge smoke test passed");
+}
+
+/** MQTT option building maps auth and TLS settings without bridge lifecycle setup. */
+function testBuildsConnectionOptions() {
+	assert.deepEqual(buildMqttConnectionOptions({ url: "mqtt://unit-test" }), {});
+	assert.deepEqual(
+		buildMqttConnectionOptions({
+			url: "mqtts://unit-test:8883",
+			username: "user",
+			password: "pass",
+			tls: {
+				ca: "ca-pem",
+				cert: "cert-pem",
+				key: "key-pem",
+				rejectUnauthorized: false,
+				servername: "broker.local",
+			},
+		}),
+		{
+			username: "user",
+			password: "pass",
+			ca: "ca-pem",
+			cert: "cert-pem",
+			key: "key-pem",
+			rejectUnauthorized: false,
+			servername: "broker.local",
+		},
+	);
 }
 
 /** MQTT connection options include optional TLS material when configured. */
