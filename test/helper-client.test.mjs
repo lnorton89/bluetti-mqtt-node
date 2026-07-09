@@ -9,6 +9,7 @@ async function run() {
   testErrorMapping();
   testDisposedObjectErrorMapping();
   testGattUnreachableErrorMapping();
+  testGattWriteUnreachableErrorMapping();
   testMalformedJsonBeforeReady();
   console.log("helper client smoke test passed");
 }
@@ -122,6 +123,33 @@ function testGattUnreachableErrorMapping() {
   assert.equal(errors.length, 1);
   assert.ok(errors[0] instanceof BadConnectionError);
   assert.match(String(errors[0]), /command_failed: Failed to enumerate GATT services: Unreachable/);
+}
+
+function testGattWriteUnreachableErrorMapping() {
+  const client = makeClientHarness();
+  const errors = [];
+  client.pending.set("request-1", {
+    resolve: () => {},
+    reject: (error) => {
+      errors.push(error);
+    },
+  });
+
+  client.handleLine(
+    JSON.stringify({
+      type: "error",
+      id: "request-1",
+      error: {
+        code: "command_failed",
+        message: "Failed to write characteristic 0000ff02-0000-1000-8000-00805f9b34fb: Unreachable.",
+      },
+    }),
+    () => {},
+    () => {},
+  );
+
+  assert.equal(errors.length, 1);
+  assert.ok(errors[0] instanceof BadConnectionError);
 }
 
 function testMalformedJsonBeforeReady() {

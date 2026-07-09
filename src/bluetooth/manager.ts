@@ -41,6 +41,23 @@ export class MultiDeviceManager {
     return session;
   }
 
+  async reconnect(address: string): Promise<void> {
+    const existing = this.sessions.get(address);
+    if (existing !== undefined) {
+      try {
+        await existing.disconnect();
+      } catch {
+        // The old Windows GATT object may already be disposed.
+      } finally {
+        this.sessions.delete(address);
+      }
+    }
+
+    const session = new DeviceSession(address, this.transportFactory.create());
+    await session.connectAndInitialize();
+    this.sessions.set(address, session);
+  }
+
   async disconnectAll(): Promise<void> {
     const failures: Error[] = [];
 

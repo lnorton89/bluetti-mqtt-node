@@ -17,6 +17,7 @@ async function run() {
   await testSwallowsExpectedReadErrors();
   await testRetriesRecoverableStartupErrorsUntilStopped();
   await testRunOncePropagatesRecoverableStartupErrors();
+  await testReconnectsAfterPollingConnectionLoss();
   await testStopInterruptsSleep();
   console.log("device handler smoke test passed");
 }
@@ -91,6 +92,27 @@ async function testRunOncePropagatesRecoverableStartupErrors() {
   await assert.rejects(handler.run(), error);
 }
 
+async function testReconnectsAfterPollingConnectionLoss() {
+  const address = "00:11:22:33:44:55";
+  const failingSession = new FakeSession(new Map(), new BadConnectionError("write unreachable"));
+  const recoveredSession = new FakeSession(new Map([[10, registers([1, 42, 2])]]));
+  const manager = new RecoveringManager(address, failingSession, recoveredSession);
+  const logger = new CapturingLogger();
+  const handler = new DeviceHandler(manager, new EventBus(), 10_000, false, logger);
+
+  const runPromise = handler.run();
+  while (manager.reconnectAttempts === 0) {
+    await flushAsync();
+  }
+  handler.stop();
+  await runPromise;
+
+  assert.equal(manager.reconnectAttempts, 1);
+  assert.equal(manager.sessionsByAddress[address], recoveredSession);
+  assert.equal(logger.warnings[0].message, "Bluetooth connection lost; reconnecting");
+  assert.equal(logger.infos[0].message, "Bluetooth connection recovered");
+}
+
 function createTestDevice() {
   const struct = new DeviceStruct()
     .addBoolField("ac_output_on", 10)
@@ -155,6 +177,20 @@ class FailingConnectManager extends FakeManager {
   }
 }
 
+class RecoveringManager extends FakeManager {
+  reconnectAttempts = 0;
+
+  constructor(address, failingSession, recoveredSession) {
+    super({ [address]: failingSession });
+    this.recoveredSession = recoveredSession;
+  }
+
+  async reconnect(address) {
+    this.reconnectAttempts += 1;
+    this.sessionsByAddress[address] = this.recoveredSession;
+  }
+}
+
 class FakeSession {
   constructor(responsesByAddress, errorToThrow) {
     this.responsesByAddress = responsesByAddress;
@@ -188,10 +224,13 @@ class TestBluettiDevice extends BluettiDevice {
 
 class CapturingLogger {
   warnings = [];
+  infos = [];
 
   debug() {}
 
-  info() {}
+  info(message, context) {
+    this.infos.push({ message, context });
+  }
 
   warn(message, context) {
     this.warnings.push({ message, context });

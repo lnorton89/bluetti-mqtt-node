@@ -53,7 +53,7 @@ interface DeviceTelemetry {
   lastSummaryAtMs: number;
 }
 
-type CommandResult = "ok" | "expected_error" | "busy";
+type CommandResult = "ok" | "expected_error" | "busy" | "connection_error";
 
 const DEFAULT_POLLING_OPTIONS: Required<PollingOptions> = {
   fastIntervalMs: 2_500,
@@ -170,8 +170,31 @@ export class DeviceHandler {
 
         const result = await this.runCommandSet(address, device, commands, state);
 
+        if (result === "connection_error") {
+          if (this.runOnce) {
+            break;
+          }
+          const recovered = await this.recoverDeviceConnection(address);
+          if (!recovered) {
+            break;
+          }
+          scheduleNextPoll(state);
+          continue;
+        }
+
         if (shouldRunFull && result !== "busy") {
           const packResult = await this.runPackCommands(address, device, state);
+          if (packResult === "connection_error") {
+            if (this.runOnce) {
+              break;
+            }
+            const recovered = await this.recoverDeviceConnection(address);
+            if (!recovered) {
+              break;
+            }
+            scheduleNextPoll(state);
+            continue;
+          }
           if (packResult === "busy") {
             applyBusyBackoff(state, this.defaultPollingOptions);
             telemetry.busyErrorCount += 1;
@@ -231,7 +254,28 @@ export class DeviceHandler {
         }
 
         this.logger.warn("Bluetooth startup failed; retrying", {
-          error: formatError(error),
+          error: formatError(error instanceof Error ? error : new Error(String(error))),
+          retryInMs: STARTUP_RETRY_DELAY_MS,
+        });
+        await this.sleep(STARTUP_RETRY_DELAY_MS);
+      }
+    }
+
+    return false;
+  }
+
+  private async recoverDeviceConnection(address: string): Promise<boolean> {
+    this.logger.warn("Bluetooth connection lost; reconnecting", { address });
+
+    while (!this.stopRequested) {
+      try {
+        await this.manager.reconnect(address);
+        this.logger.info("Bluetooth connection recovered", { address });
+        return true;
+      } catch (error) {
+        this.logger.warn("Bluetooth reconnect failed; retrying", {
+          address,
+          error: formatError(error instanceof Error ? error : new Error(String(error))),
           retryInMs: STARTUP_RETRY_DELAY_MS,
         });
         await this.sleep(STARTUP_RETRY_DELAY_MS);
@@ -309,8 +353,8 @@ export class DeviceHandler {
       }
 
       const result = await this.executeReadCommand(address, device, commands[index]!);
-      if (result === "busy") {
-        return "busy";
+      if (result === "busy" || result === "connection_error") {
+        return result;
       }
       if (result === "expected_error") {
         sawExpectedError = true;
@@ -350,11 +394,15 @@ export class DeviceHandler {
         telemetry.lastBusyAt = new Date().toISOString();
         return "busy";
       }
+      if (error instanceof BadConnectionError) {
+        telemetry.expectedErrorCount += 1;
+        telemetry.lastErrorAt = new Date().toISOString();
+        return "connection_error";
+      }
       if (
         error instanceof CommandTimeoutError
         || error instanceof ModbusError
         || error instanceof ParseError
-        || error instanceof BadConnectionError
       ) {
         telemetry.expectedErrorCount += 1;
         telemetry.lastErrorAt = new Date().toISOString();
@@ -386,11 +434,13 @@ export class DeviceHandler {
       if (error instanceof DeviceBusyError) {
         return "busy";
       }
+      if (error instanceof BadConnectionError) {
+        return "connection_error";
+      }
       if (
         error instanceof CommandTimeoutError
         || error instanceof ModbusError
         || error instanceof ParseError
-        || error instanceof BadConnectionError
       ) {
         return "expected_error";
       }
@@ -542,6 +592,12 @@ function createDevicePollingState(options: Required<PollingOptions>): DevicePoll
     fullIntervalMs: Math.max(options.fullIntervalMs, options.fastIntervalMs),
     commandDelayMs: options.commandDelayMs,
   };
+}
+
+function scheduleNextPoll(state: DevicePollingState): void {
+  const nextAt = Date.now();
+  state.nextFastPollAt = nextAt + state.fastIntervalMs;
+  state.nextFullPollAt = nextAt + state.fullIntervalMs;
 }
 
 function createDeviceTelemetry(): DeviceTelemetry {

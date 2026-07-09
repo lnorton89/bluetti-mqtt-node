@@ -251,10 +251,7 @@ function isRecoverableBluetoothConnectionError(code: string, message: string): b
 
   const normalizedMessage = message.toLowerCase();
   return normalizedMessage.includes("cannot access a disposed object")
-    || (
-      normalizedMessage.includes("failed to enumerate gatt services")
-      && normalizedMessage.includes("unreachable")
-    );
+    || normalizedMessage.includes("unreachable");
 }
 
 function resolveDefaultHelperCommand(): readonly string[] {
