@@ -1,3 +1,4 @@
+/** Errors expected at the Bluetooth/MODBUS boundary and handled as control flow. */
 export class BadConnectionError extends Error {}
 
 export class CommandTimeoutError extends Error {}

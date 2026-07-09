@@ -1,3 +1,4 @@
+/** In-memory transport used to test session behavior without Windows BLE. */
 import type { BluetoothTransport, BluetoothTransportFactory } from "./transport.js";
 
 export interface MockBluetoothOptions {

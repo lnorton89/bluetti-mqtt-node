@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+/** Main BLE-to-MQTT bridge CLI, including config-file and signal handling. */
 import { readFile } from "node:fs/promises";
 import { WindowsHelperClient, createWindowsHelperRuntime } from "../bluetooth/helper-client.js";
 import { BluettiMqttServer } from "../app/server.js";

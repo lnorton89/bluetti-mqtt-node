@@ -1,3 +1,4 @@
+/** EB3A register layout, feature flags, and writable operating modes. */
 import { ReadHoldingRegisters } from "../core/commands.js";
 import type { WritableRange } from "../core/types.js";
 import { BluettiDevice } from "./device.js";

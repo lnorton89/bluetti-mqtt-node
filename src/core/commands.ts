@@ -1,3 +1,4 @@
+/** Builds and validates the MODBUS RTU frames carried over Bluetti BLE. */
 import { appendModbusCrc, hasValidModbusCrc } from "./crc.js";
 
 export abstract class DeviceCommand {

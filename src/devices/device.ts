@@ -1,3 +1,7 @@
+/**
+ * Base device model: register metadata, polling groups, and validated setter
+ * construction shared by every supported Bluetti product.
+ */
 import { ReadHoldingRegisters, WriteSingleRegister } from "../core/commands.js";
 import { isAddressWritable, type WritableRange } from "../core/types.js";
 import { BoolField, DeviceStruct, EnumField } from "./struct.js";

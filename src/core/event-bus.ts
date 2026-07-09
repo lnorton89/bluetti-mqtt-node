@@ -1,3 +1,7 @@
+/**
+ * Small async fan-out bus joining polling and MQTT without coupling either
+ * side to the other's lifecycle.
+ */
 export interface ParserMessage<Device> {
   readonly device: Device;
   readonly parsed: Record<string, unknown>;

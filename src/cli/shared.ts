@@ -1,3 +1,4 @@
+/** Shared CLI validation, connection ownership, output normalization, and signals. */
 import { DeviceSession } from "../bluetooth/device-session.js";
 import { WindowsHelperClient, createWindowsHelperRuntime } from "../bluetooth/helper-client.js";
 import type { BluetoothTransport } from "../bluetooth/transport.js";

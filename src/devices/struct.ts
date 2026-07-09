@@ -1,3 +1,7 @@
+/**
+ * Declarative register schema and field decoders. A DeviceStruct parses only
+ * fields fully covered by the returned register window.
+ */
 import type { DeviceEnumValue, ParsedFieldMap, ParsedValue } from "../core/types.js";
 
 export interface EnumDefinition {

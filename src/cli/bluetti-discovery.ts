@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+/** Scans through the Windows helper and prints discoverable Bluetti devices. */
 import { WindowsHelperClient, createWindowsHelperRuntime } from "../bluetooth/helper-client.js";
 import { hasHelpFlag, HelpError, runCli } from "./shared.js";
 

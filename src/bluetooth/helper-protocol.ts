@@ -1,3 +1,4 @@
+/** Wire types for the JSON-lines protocol exchanged with the Windows helper. */
 export interface HelperRequest {
   readonly id?: string;
   readonly command: string;

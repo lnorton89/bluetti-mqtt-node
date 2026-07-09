@@ -1,3 +1,4 @@
+// Covers polling publication, expected failures, shutdown, and reconnect control flow.
 import assert from "node:assert/strict";
 import { DeviceHandler } from "../dist/app/device-handler.js";
 import { EventBus } from "../dist/core/event-bus.js";

@@ -1,3 +1,7 @@
+/**
+ * Platform-neutral BLE boundary. Subscription lifetime intentionally matches
+ * connection lifetime; disconnect is responsible for removing all callbacks.
+ */
 export interface DiscoveredBluetoothDevice {
   readonly address: string;
   readonly name: string;

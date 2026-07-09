@@ -1,3 +1,4 @@
+/** EP600 high-voltage system register layout and polling windows. */
 import { ReadHoldingRegisters } from "../core/commands.js";
 import { BluettiDevice } from "./device.js";
 import { DeviceStruct } from "./struct.js";

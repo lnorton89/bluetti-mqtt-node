@@ -1,3 +1,4 @@
+/** Maps Bluetti advertisement names to the matching typed device definition. */
 import { AC200M } from "./ac200m.js";
 import { AC300 } from "./ac300.js";
 import { AC500 } from "./ac500.js";

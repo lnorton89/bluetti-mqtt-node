@@ -1,3 +1,4 @@
+// Exercises CLI validation in-process and through the compiled entry point.
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { mkdtemp, writeFile } from "node:fs/promises";

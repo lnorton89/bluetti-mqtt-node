@@ -1,3 +1,4 @@
+// Verifies top-level server cleanup remains best-effort when transports fail.
 import assert from "node:assert/strict";
 import { BluettiMqttServer } from "../dist/app/server.js";
 import { BadConnectionError } from "../dist/bluetooth/errors.js";

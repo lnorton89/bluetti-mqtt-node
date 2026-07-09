@@ -1,3 +1,4 @@
+/** AC200M register layout, polling windows, and writable field definitions. */
 import { ReadHoldingRegisters } from "../core/commands.js";
 import type { WritableRange } from "../core/types.js";
 import { BluettiDevice } from "./device.js";

@@ -1,3 +1,4 @@
+// Verifies device metadata produces only valid, writable MODBUS setter commands.
 import assert from "node:assert/strict";
 import { ReadHoldingRegisters, WriteSingleRegister } from "../dist/core/commands.js";
 import { BluettiDevice } from "../dist/devices/device.js";

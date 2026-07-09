@@ -1,3 +1,4 @@
+/** AC300 register layout, including multi-pack telemetry and control fields. */
 import { ReadHoldingRegisters } from "../core/commands.js";
 import type { WritableRange } from "../core/types.js";
 import { BluettiDevice } from "./device.js";

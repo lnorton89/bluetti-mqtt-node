@@ -1,3 +1,7 @@
+/**
+ * JSON-lines client and transport adapter for the native Windows GATT helper.
+ * The helper process is shared, while each transport owns one helper session.
+ */
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";

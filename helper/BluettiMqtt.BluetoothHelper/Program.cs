@@ -1,3 +1,5 @@
+// Native Windows Runtime bridge. It owns GATT objects and exposes the small
+// JSON-lines command protocol consumed by WindowsHelperClient in Node.
 using System.Text.Json;
 using System.Collections.Concurrent;
 using Windows.Devices.Bluetooth;
@@ -18,6 +20,8 @@ await protocol.RunAsync(cts.Token);
 
 internal sealed class HelperProtocol : IAsyncDisposable
 {
+    // Requests are processed serially, while notification events may write from
+    // Windows callbacks; _writeLock keeps each JSON line intact.
     private readonly TextReader _input;
     private readonly TextWriter _output;
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
@@ -309,6 +313,8 @@ internal sealed class HelperProtocol : IAsyncDisposable
 
 internal sealed class DeviceConnection : IAsyncDisposable
 {
+    // A session caches services/characteristics for its lifetime and owns every
+    // ValueChanged handler installed on those WinRT objects.
     private readonly BluetoothLEDevice _device;
     private readonly Func<NotificationEvent, Task> _emitNotification;
     private readonly Dictionary<Guid, GattCharacteristic> _characteristics = new();

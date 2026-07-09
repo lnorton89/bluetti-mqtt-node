@@ -1,5 +1,6 @@
 const MODBUS_POLYNOMIAL = 0xa001;
 
+/** MODBUS CRC-16 helpers. CRC bytes are encoded low byte first on the wire. */
 export function modbusCrc(data: Uint8Array): number {
   let crc = 0xffff;
 

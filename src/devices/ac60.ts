@@ -1,3 +1,4 @@
+/** AC60 register layout and its compact polling command set. */
 import { ReadHoldingRegisters } from "../core/commands.js";
 import { BluettiDevice } from "./device.js";
 import { DeviceStruct } from "./struct.js";

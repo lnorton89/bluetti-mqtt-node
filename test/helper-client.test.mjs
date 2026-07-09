@@ -1,3 +1,4 @@
+// Exercises helper wire errors and transport rollback without spawning the native helper.
 import assert from "node:assert/strict";
 import { BadConnectionError } from "../dist/bluetooth/errors.js";
 import { WindowsHelperClient, createWindowsHelperRuntime } from "../dist/bluetooth/helper-client.js";

@@ -1,3 +1,4 @@
+// Verifies register-window decoding, field formats, and malformed payload rejection.
 import assert from "node:assert/strict";
 import { DeviceStruct } from "../dist/devices/struct.js";
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+/** Runs the device's extended logging register set and prints decoded JSON. */
 import { normalizeValue, requireSingleAddressArg, runCli, runPollingCommands, withConnectedDevice } from "./shared.js";
 
 const HELP_TEXT = `Usage: bluetti-mqtt-node-logger <BLUETOOTH_MAC>

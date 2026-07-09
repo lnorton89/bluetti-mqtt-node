@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+/** Minimal scan/connect/read diagnostic used to isolate BLE setup failures. */
 import { DeviceSession } from "../bluetooth/device-session.js";
 import { WindowsHelperClient, createWindowsHelperRuntime } from "../bluetooth/helper-client.js";
 import type { BluetoothTransport } from "../bluetooth/transport.js";

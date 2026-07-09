@@ -1,3 +1,4 @@
+/** EP500P register layout and AC300-family control enums. */
 import { ReadHoldingRegisters } from "../core/commands.js";
 import type { WritableRange } from "../core/types.js";
 import { BluettiDevice } from "./device.js";

@@ -1,3 +1,4 @@
+/** Structured logging boundary shared by the CLI, bridge, and test doubles. */
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
 export interface Logger {

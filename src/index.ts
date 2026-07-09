@@ -1,3 +1,4 @@
+/** Public package surface for consumers embedding the bridge or protocol types. */
 export * from "./app/server.js";
 export * from "./bluetooth/device-session.js";
 export * from "./bluetooth/errors.js";

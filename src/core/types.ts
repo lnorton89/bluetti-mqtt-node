@@ -6,6 +6,7 @@ export type ParsedValue =
   | readonly number[]
   | DeviceEnumValue;
 
+/** Domain value types emitted by device register parsers. */
 export interface DeviceEnumValue {
   readonly name: string;
   readonly value: number;

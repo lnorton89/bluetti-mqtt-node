@@ -1,3 +1,4 @@
+// Covers command/notification framing, timeouts, disconnects, and MODBUS validation.
 import assert from "node:assert/strict";
 import { DeviceSession } from "../dist/bluetooth/device-session.js";
 import { CommandTimeoutError } from "../dist/bluetooth/errors.js";

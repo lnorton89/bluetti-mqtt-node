@@ -1,3 +1,4 @@
+// Importing each smoke module executes its self-contained assertions in order.
 await import("./device-session.test.mjs");
 await import("./mqtt-client.test.mjs");
 await import("./device-setter.test.mjs");

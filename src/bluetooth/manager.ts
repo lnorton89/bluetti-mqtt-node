@@ -1,3 +1,7 @@
+/**
+ * Owns active device sessions and replaces them atomically during reconnects.
+ * Failed sessions are removed before a replacement is exposed to callers.
+ */
 import { DeviceSession } from "./device-session.js";
 import type { BluetoothTransportFactory } from "./transport.js";
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+/** Runs the standard polling register set once and prints merged device state. */
 import { WindowsHelperClient, createWindowsHelperRuntime } from "../bluetooth/helper-client.js";
 import {
   hasHelpFlag,

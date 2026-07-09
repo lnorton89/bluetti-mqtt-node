@@ -1,3 +1,7 @@
+/**
+ * Bridges parsed device state and writable commands between the internal event
+ * bus and MQTT, including listener ownership and rollback on partial startup.
+ */
 import { connectAsync, type MqttClient as RawMqttClient } from "mqtt";
 import { ReadHoldingRegisters, type DeviceCommand } from "../core/commands.js";
 import type { EventBus, ParserMessage, CommandMessage } from "../core/event-bus.js";

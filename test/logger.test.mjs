@@ -1,3 +1,4 @@
+// Verifies structured logger level filtering and serialization behavior.
 import assert from "node:assert/strict";
 import { ConsoleLogger } from "../dist/core/logger.js";
 

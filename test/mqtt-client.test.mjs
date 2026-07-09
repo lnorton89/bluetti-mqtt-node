@@ -1,3 +1,4 @@
+// Covers state publication, command dispatch, and MQTT lifecycle rollback.
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { BasicMqttClient, BluettiMqttBridge } from "../dist/mqtt/client.js";

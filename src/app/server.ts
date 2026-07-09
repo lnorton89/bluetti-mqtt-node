@@ -1,3 +1,7 @@
+/**
+ * Composes the Bluetooth manager, polling handler, event bus, and MQTT bridge
+ * into the long-running application lifecycle used by the CLI.
+ */
 import { MultiDeviceManager } from "../bluetooth/manager.js";
 import type { BluetoothTransportFactory } from "../bluetooth/transport.js";
 import { DeviceCommand } from "../core/commands.js";

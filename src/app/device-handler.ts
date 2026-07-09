@@ -1,3 +1,7 @@
+/**
+ * Owns device polling, adaptive backoff, per-device command serialization, and
+ * in-process recovery when a Bluetooth session becomes unusable.
+ */
 import {
   BadConnectionError,
   CommandTimeoutError,
