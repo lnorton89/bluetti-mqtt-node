@@ -1,6 +1,3 @@
-import {
-  BadConnectionError,
-} from "../bluetooth/errors.js";
 import { MultiDeviceManager } from "../bluetooth/manager.js";
 import { DeviceCommand } from "../core/commands.js";
 import { EventBus } from "../core/event-bus.js";
@@ -14,16 +11,16 @@ import {
   createDeviceTelemetry,
   type DevicePollingState,
   type DeviceTelemetry,
-  formatError,
   normalizePollingOptions,
   type PollingOptions,
   recoverPollingState,
   scheduleNextPoll,
-  STARTUP_RETRY_DELAY_MS,
   summarizeTelemetry,
   TELEMETRY_SUMMARY_INTERVAL_MS,
 } from "./polling-state.js";
 import { DeviceCommandRunner } from "./device-executor.js";
+import { connectAllWithRecovery, recoverDeviceConnection } from "./device-connection.js";
+import { DeviceWorkQueue } from "./device-queue.js";
 
 // Re-export so existing imports from device-handler.js continue to work.
 export type { PollingOptions } from "./polling-state.js";
@@ -59,17 +56,12 @@ export class DeviceHandler {
   private readonly pollingState = new Map<string, DevicePollingState>();
   /** Per-device telemetry counters. */
   private readonly telemetry = new Map<string, DeviceTelemetry>();
-  /** Per-device promise-chain mutex queues for serialized work. */
-  private readonly deviceQueues = new Map<string, Promise<void>>();
   /** Delegated command execution with error classification. */
   private readonly executor: DeviceCommandRunner;
+  /** Per-address work queue with interruptible sleep and stop signalling. */
+  private readonly queue = new DeviceWorkQueue();
   /** Whether the event bus command listener has been installed. */
   private commandListenerAttached = false;
-  /** Whether {@link stop} has been requested. */
-  private stopRequested = false;
-  /** Registered wake callbacks for interrupting {@link sleep}. */
-  private readonly sleepWaiters = new Set<() => void>();
-
   /** Resolved polling options with defaults filled in. */
   private readonly defaultPollingOptions: Required<PollingOptions>;
 
@@ -95,9 +87,9 @@ export class DeviceHandler {
       manager,
       bus,
       (addr) => this.getTelemetry(addr),
-      (addr, work) => this.enqueueDeviceWork(addr, work),
-      () => this.stopRequested,
-      (ms) => this.sleep(ms),
+      (addr, work) => this.queue.enqueue(addr, work),
+      () => this.queue.isStopRequested,
+      (ms) => this.queue.sleep(ms),
     );
   }
 
@@ -175,8 +167,14 @@ export class DeviceHandler {
    * unrecoverable connection loss).
    */
   async run(): Promise<void> {
-    this.stopRequested = false;
-    const connected = await this.connectAllWithRecovery();
+    this.queue.reset();
+    const connected = await connectAllWithRecovery(
+      () => this.connectAll(),
+      () => this.queue.isStopRequested,
+      this.runOnce,
+      this.logger,
+      (ms) => this.queue.sleep(ms),
+    );
     if (!connected) {
       return;
     }
@@ -190,13 +188,13 @@ export class DeviceHandler {
       const state = this.getPollingState(address);
       const telemetry = this.getTelemetry(address);
 
-      while (!this.stopRequested) {
+      while (!this.queue.isStopRequested) {
         const now = Date.now();
         const shouldRunFull = now >= state.nextFullPollAt;
         const shouldRunFast = shouldRunFull || now >= state.nextFastPollAt;
 
         if (!shouldRunFast) {
-          await this.sleep(Math.max(0, Math.min(state.nextFastPollAt, state.nextFullPollAt) - now));
+          await this.queue.sleep(Math.max(0, Math.min(state.nextFastPollAt, state.nextFullPollAt) - now));
           continue;
         }
 
@@ -220,7 +218,9 @@ export class DeviceHandler {
           if (this.runOnce) {
             break;
           }
-          const recovered = await this.recoverDeviceConnection(address);
+          const recovered = await recoverDeviceConnection(
+            address, this.manager, () => this.queue.isStopRequested, this.logger, (ms) => this.queue.sleep(ms),
+          );
           if (!recovered) {
             break;
           }
@@ -234,7 +234,9 @@ export class DeviceHandler {
             if (this.runOnce) {
               break;
             }
-            const recovered = await this.recoverDeviceConnection(address);
+          const recovered = await recoverDeviceConnection(
+            address, this.manager, () => this.queue.isStopRequested, this.logger, (ms) => this.queue.sleep(ms),
+          );
             if (!recovered) {
               break;
             }
@@ -282,94 +284,16 @@ export class DeviceHandler {
           state.nextFullPollAt = nextAt + state.fullIntervalMs;
         }
 
-        if (this.runOnce || this.stopRequested) {
+        if (this.runOnce || this.queue.isStopRequested) {
           break;
         }
       }
     }));
   }
 
-  /**
-   * Calls {@link connectAll} with retry-on-failure for recoverable BLE startup
-   * errors.
-   *
-   * @returns `true` when connection succeeds, `false` when stopped before
-   *   success.
-   * @throws {Error} When a non-recoverable error occurs or `runOnce` is set.
-   *
-   * @remarks
-   * Retries {@link BadConnectionError} indefinitely with a fixed delay until
-   * either the connection succeeds or {@link stop} is requested. Non-BLE
-   * errors propagate immediately.
-   */
-  private async connectAllWithRecovery(): Promise<boolean> {
-    while (!this.stopRequested) {
-      try {
-        await this.connectAll();
-        return true;
-      } catch (error) {
-        if (this.runOnce || !(error instanceof BadConnectionError)) {
-          throw error;
-        }
-
-        this.logger.warn("Bluetooth startup failed; retrying", {
-          error: formatError(error instanceof Error ? error : new Error(String(error))),
-          retryInMs: STARTUP_RETRY_DELAY_MS,
-        });
-        await this.sleep(STARTUP_RETRY_DELAY_MS);
-      }
-    }
-
-    return false;
-  }
-
-  /**
-   * Repeatedly attempts to reconnect a lost device until success or stop.
-   *
-   * @param address - Bluetooth MAC address of the device to recover.
-   * @returns `true` when reconnection succeeds, `false` when stopped.
-   *
-   * @remarks
-   * Logs each failure and waits {@link STARTUP_RETRY_DELAY_MS} before retrying.
-   * A replacement session is published by the manager only after initialization
-   * and notification subscription both succeed.
-   */
-  private async recoverDeviceConnection(address: string): Promise<boolean> {
-    this.logger.warn("Bluetooth connection lost; reconnecting", { address });
-
-    while (!this.stopRequested) {
-      // A replacement is published by the manager only after initialization
-      // and notification subscription both succeed.
-      try {
-        await this.manager.reconnect(address);
-        this.logger.info("Bluetooth connection recovered", { address });
-        return true;
-      } catch (error) {
-        this.logger.warn("Bluetooth reconnect failed; retrying", {
-          address,
-          error: formatError(error instanceof Error ? error : new Error(String(error))),
-          retryInMs: STARTUP_RETRY_DELAY_MS,
-        });
-        await this.sleep(STARTUP_RETRY_DELAY_MS);
-      }
-    }
-
-    return false;
-  }
-
-  /**
-   * Requests cooperative shutdown and wakes any loops currently sleeping.
-   *
-   * @remarks
-   * Sets the stop flag and resolves all pending sleep promises so that
-   * polling loops exit at their next iteration check.
-   */
+  /** Requests cooperative shutdown and wakes any sleeping loops. */
   stop(): void {
-    this.stopRequested = true;
-    for (const wake of this.sleepWaiters) {
-      wake();
-    }
-    this.sleepWaiters.clear();
+    this.queue.stop();
   }
 
   /**
@@ -470,80 +394,6 @@ export class DeviceHandler {
       commandDelayMs: state.commandDelayMs,
       suppressedBusyWarnings: suppressedCount,
       telemetry: summarizeTelemetry(telemetry),
-    });
-  }
-
-  /**
-   * Serializes async work per address using a promise-chain mutex.
-   *
-   * @param address - Bluetooth MAC address whose work queue to use.
-   * @param work - Async function to execute once it is this address's turn.
-   * @returns The result of `work`.
-   *
-   * @remarks
-   * Promise chaining acts as a per-address mutex without delaying unrelated
-   * devices that have their own queues. The queue entry is cleaned up after
-   * the work completes so stale promises do not accumulate.
-   */
-  private async enqueueDeviceWork<T>(address: string, work: () => Promise<T>): Promise<T> {
-    // Promise chaining acts as a per-address mutex without delaying unrelated
-    // devices that have their own queues.
-    const previous = this.deviceQueues.get(address) ?? Promise.resolve();
-    let release!: () => void;
-
-    const current = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const queued = previous.then(() => current);
-    this.deviceQueues.set(address, queued);
-
-    await previous;
-
-    try {
-      return await work();
-    } finally {
-      release();
-      if (this.deviceQueues.get(address) === queued) {
-        this.deviceQueues.delete(address);
-      }
-    }
-  }
-
-  /**
-   * Sleeps for `ms` milliseconds, interruptible by {@link stop}.
-   *
-   * @param ms - Duration in milliseconds. Returns immediately if `<= 0` or
-   *   stop has been requested.
-   *
-   * @remarks
-   * Registers the waiter in {@link sleepWaiters} so that {@link stop} can
-   * wake all sleeping loops immediately without waiting for their timers.
-   * The waiter is idempotent and cleans up after itself.
-   */
-  private async sleep(ms: number): Promise<void> {
-    if (this.stopRequested || ms <= 0) {
-      return;
-    }
-
-    await new Promise<void>((resolve) => {
-      let finished = false;
-      let timer: ReturnType<typeof setTimeout> | undefined;
-
-      const done = (): void => {
-        if (finished) {
-          return;
-        }
-
-        finished = true;
-        if (timer !== undefined) {
-          clearTimeout(timer);
-        }
-        this.sleepWaiters.delete(done);
-        resolve();
-      };
-
-      this.sleepWaiters.add(done);
-      timer = setTimeout(done, ms);
     });
   }
 }
