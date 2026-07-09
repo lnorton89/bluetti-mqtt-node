@@ -24,6 +24,7 @@ export class MockBluetoothTransport implements BluetoothTransport {
 
   async disconnect(): Promise<void> {
     this.connectedAddress = null;
+    this.subscribers.clear();
   }
 
   async readCharacteristic(uuid: string): Promise<Uint8Array> {

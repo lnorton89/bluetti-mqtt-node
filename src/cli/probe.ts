@@ -2,6 +2,7 @@
 
 import { DeviceSession } from "../bluetooth/device-session.js";
 import { WindowsHelperClient, createWindowsHelperRuntime } from "../bluetooth/helper-client.js";
+import type { BluetoothTransport } from "../bluetooth/transport.js";
 import { ReadHoldingRegisters } from "../core/commands.js";
 import { createDeviceFromAdvertisement } from "../devices/registry.js";
 import { hasHelpFlag, HelpError, optionalSingleAddressArg, runCli } from "./shared.js";
@@ -21,6 +22,8 @@ async function main(): Promise<void> {
   const address = optionalSingleAddressArg(argv, HELP_TEXT);
 
   const client = new WindowsHelperClient();
+  let transport: BluetoothTransport | null = null;
+  let operationFailed = false;
   try {
     const runtime = createWindowsHelperRuntime(client);
     if (!address) {
@@ -29,7 +32,7 @@ async function main(): Promise<void> {
       return;
     }
 
-    const transport = runtime.transportFactory.create();
+    transport = runtime.transportFactory.create();
     const session = new DeviceSession(address, transport);
     await session.connectAndInitialize();
 
@@ -46,9 +49,24 @@ async function main(): Promise<void> {
     const device = createDeviceFromAdvertisement(address, session.name);
     const parsed = device.parse(command.startingAddress, command.parseResponse(response));
     console.log(JSON.stringify(parsed, bigintReplacer, 2));
-    await transport.disconnect();
+  } catch (error) {
+    operationFailed = true;
+    throw error;
   } finally {
+    let disconnectError: unknown;
+    if (transport !== null) {
+      try {
+        await transport.disconnect();
+      } catch (error) {
+        if (!operationFailed) {
+          disconnectError = error;
+        }
+      }
+    }
     client.dispose();
+    if (disconnectError !== undefined) {
+      throw disconnectError;
+    }
   }
 }
 

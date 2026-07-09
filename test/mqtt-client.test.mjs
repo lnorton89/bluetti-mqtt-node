@@ -12,6 +12,7 @@ async function run() {
   await testRejectsUnknownDeviceCommand();
   await testRejectsNonWritableFieldCommand();
   await testRejectsInvalidCommandPayloads();
+  await testStartupSubscriptionFailureRollsBackBridge();
   console.log("mqtt bridge smoke test passed");
 }
 
@@ -179,6 +180,22 @@ async function testRejectsInvalidCommandPayloads() {
   await bridge.stop();
 }
 
+async function testStartupSubscriptionFailureRollsBackBridge() {
+  const bus = new EventBus();
+  const mqtt = new FakeRawMqttClient();
+  mqtt.subscribeError = new Error("subscribe failed");
+  const bridge = new BluettiMqttBridge(bus, { url: "mqtt://unit-test" }, async () => mqtt, silentLogger);
+
+  await assert.rejects(bridge.run(), /subscribe failed/);
+  await bus.publishParserMessage({
+    device: createTestDevice(),
+    parsed: { output_power: 42 },
+  });
+
+  assert.equal(mqtt.ended, true);
+  assert.deepEqual(mqtt.published, []);
+}
+
 function createTestDevice() {
   const struct = new DeviceStruct()
     .addBoolField("charge_enabled", 10)
@@ -211,8 +228,10 @@ class FakeRawMqttClient extends EventEmitter {
   subscriptions = [];
   published = [];
   ended = false;
+  subscribeError = null;
 
   async subscribe(topic) {
+    if (this.subscribeError) throw this.subscribeError;
     this.subscriptions.push(topic);
   }
 

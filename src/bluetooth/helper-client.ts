@@ -35,6 +35,7 @@ const SOURCE_HELPER_PROJECT = resolve(
   "BluettiMqtt.BluetoothHelper",
   "BluettiMqtt.BluetoothHelper.csproj",
 );
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
 export class WindowsHelperClient implements BluetoothDiscovery {
   private readonly process: ChildProcessWithoutNullStreams;
@@ -44,7 +45,10 @@ export class WindowsHelperClient implements BluetoothDiscovery {
   private readyResolved = false;
   private disposeRequested = false;
 
-  constructor(command = resolveDefaultHelperCommand()) {
+  constructor(
+    command = resolveDefaultHelperCommand(),
+    private readonly requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
+  ) {
     const [file, ...args] = command;
     if (file === undefined) {
       throw new Error("Helper command cannot be empty");
@@ -60,7 +64,15 @@ export class WindowsHelperClient implements BluetoothDiscovery {
       lines.on("line", (line) => {
         this.handleLine(line, resolve, reject);
       });
-      this.process.once("error", reject);
+      this.process.once("error", (error) => {
+        if (!this.readyResolved) {
+          reject(error);
+        }
+        this.rejectPending(error);
+      });
+      this.process.stdin.on("error", (error) => {
+        this.rejectPending(error);
+      });
       this.process.once("exit", (code) => {
         if (this.disposeRequested) {
           if (!this.readyResolved) {
@@ -74,10 +86,7 @@ export class WindowsHelperClient implements BluetoothDiscovery {
         if (!this.readyResolved) {
           reject(error);
         }
-        for (const pending of this.pending.values()) {
-          pending.reject(error);
-        }
-        this.pending.clear();
+        this.rejectPending(error);
       });
     });
   }
@@ -91,7 +100,11 @@ export class WindowsHelperClient implements BluetoothDiscovery {
   }
 
   async scan(timeoutMs = 5_000): Promise<readonly HelperScanDevice[]> {
-    const payload = await this.request("scan", { timeoutMs });
+    const payload = await this.request(
+      "scan",
+      { timeoutMs },
+      Math.max(this.requestTimeoutMs, timeoutMs + 5_000),
+    );
     const devices = payload?.devices;
     if (!Array.isArray(devices)) {
       return [];
@@ -152,17 +165,19 @@ export class WindowsHelperClient implements BluetoothDiscovery {
 
   dispose(): void {
     this.disposeRequested = true;
-    for (const pending of this.pending.values()) {
-      pending.reject(new Error("Windows BLE helper disposed"));
-    }
-    this.pending.clear();
+    this.rejectPending(new Error("Windows BLE helper disposed"));
+    this.notificationListeners.clear();
 
     if (!this.process.killed) {
       this.process.kill();
     }
   }
 
-  private async request(command: string, argumentsObject?: Record<string, unknown>): Promise<Record<string, unknown> | undefined> {
+  private async request(
+    command: string,
+    argumentsObject?: Record<string, unknown>,
+    timeoutMs = this.requestTimeoutMs,
+  ): Promise<Record<string, unknown> | undefined> {
     if (this.disposeRequested) {
       throw new Error("Windows BLE helper disposed");
     }
@@ -176,11 +191,33 @@ export class WindowsHelperClient implements BluetoothDiscovery {
     }
 
     const response = new Promise<Record<string, unknown> | undefined>((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      const timeout = setTimeout(() => {
+        if (this.pending.delete(id)) {
+          reject(new BadConnectionError(`Windows BLE helper request timed out: ${command}`));
+        }
+      }, timeoutMs);
+      this.pending.set(id, { resolve, reject, timeout });
     });
 
-    this.process.stdin.write(`${JSON.stringify(request)}\n`);
+    try {
+      this.process.stdin.write(`${JSON.stringify(request)}\n`);
+    } catch (error) {
+      const pending = this.pending.get(id);
+      if (pending !== undefined) {
+        clearTimeout(pending.timeout);
+        this.pending.delete(id);
+      }
+      throw error;
+    }
     return response;
+  }
+
+  private rejectPending(error: unknown): void {
+    for (const pending of this.pending.values()) {
+      clearTimeout(pending.timeout);
+      pending.reject(error);
+    }
+    this.pending.clear();
   }
 
   private handleLine(line: string, onReady: () => void, onReadyError: (reason?: unknown) => void): void {
@@ -227,6 +264,7 @@ export class WindowsHelperClient implements BluetoothDiscovery {
     }
 
     this.pending.delete(message.id);
+    clearTimeout(pending.timeout);
     if (message.type === "response") {
       pending.resolve(message.payload);
     } else {
@@ -295,27 +333,42 @@ class WindowsHelperTransport implements BluetoothTransport {
   constructor(private readonly client: WindowsHelperClient) {}
 
   async connect(address: string): Promise<void> {
+    if (this.sessionId !== null) {
+      throw new Error("Helper transport is already connected");
+    }
+
     const connection = await this.client.connect(address);
     this.sessionId = connection.sessionId;
-    this.unsubscribeNotification = this.client.onNotification((event) => {
-      if (event.sessionId !== this.sessionId) {
-        return;
-      }
+    try {
+      this.unsubscribeNotification = this.client.onNotification((event) => {
+        if (event.sessionId !== this.sessionId) {
+          return;
+        }
 
-      const callback = this.subscribers.get(normalizeUuid(event.uuid));
-      callback?.(event.data);
-    });
+        const callback = this.subscribers.get(normalizeUuid(event.uuid));
+        callback?.(event.data);
+      });
+    } catch (error) {
+      this.sessionId = null;
+      try {
+        await this.client.disconnect(connection.sessionId);
+      } catch {
+        // Preserve the notification wiring failure that made the transport unusable.
+      }
+      throw error;
+    }
   }
 
   async disconnect(): Promise<void> {
-    if (this.sessionId !== null) {
-      await this.client.disconnect(this.sessionId);
-      this.sessionId = null;
-    }
-
+    const sessionId = this.sessionId;
+    this.sessionId = null;
     this.unsubscribeNotification?.();
     this.unsubscribeNotification = null;
     this.subscribers.clear();
+
+    if (sessionId !== null) {
+      await this.client.disconnect(sessionId);
+    }
   }
 
   async readCharacteristic(uuid: string): Promise<Uint8Array> {
@@ -328,8 +381,18 @@ class WindowsHelperTransport implements BluetoothTransport {
 
   async subscribe(uuid: string, onData: (data: Uint8Array) => void): Promise<void> {
     const normalizedUuid = normalizeUuid(uuid);
+    const previous = this.subscribers.get(normalizedUuid);
     this.subscribers.set(normalizedUuid, onData);
-    await this.client.subscribe(this.requireSessionId(), uuid);
+    try {
+      await this.client.subscribe(this.requireSessionId(), uuid);
+    } catch (error) {
+      if (previous === undefined) {
+        this.subscribers.delete(normalizedUuid);
+      } else {
+        this.subscribers.set(normalizedUuid, previous);
+      }
+      throw error;
+    }
   }
 
   private requireSessionId(): string {
@@ -343,6 +406,7 @@ class WindowsHelperTransport implements BluetoothTransport {
 interface PendingRequest {
   resolve: (value: Record<string, unknown> | undefined) => void;
   reject: (reason?: unknown) => void;
+  timeout?: ReturnType<typeof setTimeout>;
 }
 
 interface HelperNotification {

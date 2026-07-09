@@ -102,13 +102,26 @@ internal sealed class HelperProtocol : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        var failures = new List<Exception>();
         foreach (var connection in _connections.Values)
         {
-            await connection.DisposeAsync();
+            try
+            {
+                await connection.DisposeAsync();
+            }
+            catch (Exception ex)
+            {
+                failures.Add(ex);
+            }
         }
 
         _connections.Clear();
         _writeLock.Dispose();
+
+        if (failures.Count > 0)
+        {
+            throw new AggregateException("Failed to dispose one or more Bluetooth connections.", failures);
+        }
     }
 
     private async Task HandleScanAsync(HelperRequest request, CancellationToken cancellationToken)
@@ -127,15 +140,31 @@ internal sealed class HelperProtocol : IAsyncDisposable
             notification => WriteEventAsync(new HelperEvent("notification", notification), CancellationToken.None));
 
         _connections[connection.SessionId] = connection;
-        await WriteResponseAsync(
-            request.Id,
-            new
+        try
+        {
+            await WriteResponseAsync(
+                request.Id,
+                new
+                {
+                    sessionId = connection.SessionId,
+                    address = addressText,
+                    name = connection.Name
+                },
+                cancellationToken);
+        }
+        catch
+        {
+            _connections.Remove(connection.SessionId);
+            try
             {
-                sessionId = connection.SessionId,
-                address = addressText,
-                name = connection.Name
-            },
-            cancellationToken);
+                await connection.DisposeAsync();
+            }
+            catch
+            {
+                // Preserve the response failure that made the connection unusable.
+            }
+            throw;
+        }
     }
 
     private async Task HandleDisconnectAsync(HelperRequest request, CancellationToken cancellationToken)
@@ -319,7 +348,7 @@ internal sealed class DeviceConnection : IAsyncDisposable
     public async Task WriteCharacteristicAsync(string uuidText, byte[] data, bool withoutResponse)
     {
         var characteristic = await GetCharacteristicAsync(ParseUuid(uuidText));
-        var writer = new DataWriter();
+        using var writer = new DataWriter();
         writer.WriteBytes(data);
         var option = withoutResponse ? GattWriteOption.WriteWithoutResponse : GattWriteOption.WriteWithResponse;
         var status = await characteristic.WriteValueAsync(writer.DetachBuffer(), option);
@@ -342,21 +371,40 @@ internal sealed class DeviceConnection : IAsyncDisposable
         };
 
         characteristic.ValueChanged += handler;
-        var status = await characteristic.WriteClientCharacteristicConfigurationDescriptorAsync(
-            GattClientCharacteristicConfigurationDescriptorValue.Notify);
-        EnsureSuccess(status, $"subscribe to characteristic {uuidText}");
-        _handlers[uuid] = handler;
+        try
+        {
+            var status = await characteristic.WriteClientCharacteristicConfigurationDescriptorAsync(
+                GattClientCharacteristicConfigurationDescriptorValue.Notify);
+            EnsureSuccess(status, $"subscribe to characteristic {uuidText}");
+            _handlers[uuid] = handler;
+        }
+        catch
+        {
+            characteristic.ValueChanged -= handler;
+            throw;
+        }
     }
 
     public async ValueTask DisposeAsync()
     {
-        foreach (var pair in _handlers)
+        var failures = new List<Exception>();
+        var handlers = _handlers.ToArray();
+        _handlers.Clear();
+
+        foreach (var pair in handlers)
         {
             if (_characteristics.TryGetValue(pair.Key, out var characteristic))
             {
                 characteristic.ValueChanged -= pair.Value;
-                await characteristic.WriteClientCharacteristicConfigurationDescriptorAsync(
-                    GattClientCharacteristicConfigurationDescriptorValue.None);
+                try
+                {
+                    await characteristic.WriteClientCharacteristicConfigurationDescriptorAsync(
+                        GattClientCharacteristicConfigurationDescriptorValue.None);
+                }
+                catch (Exception ex)
+                {
+                    failures.Add(ex);
+                }
             }
         }
 
@@ -364,11 +412,32 @@ internal sealed class DeviceConnection : IAsyncDisposable
         {
             foreach (var service in _services)
             {
-                service.Dispose();
+                try
+                {
+                    service.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    failures.Add(ex);
+                }
             }
+            _services = null;
         }
 
-        _device.Dispose();
+        _characteristics.Clear();
+        try
+        {
+            _device.Dispose();
+        }
+        catch (Exception ex)
+        {
+            failures.Add(ex);
+        }
+
+        if (failures.Count > 0)
+        {
+            throw new AggregateException("Bluetooth connection cleanup failed.", failures);
+        }
     }
 
     private async Task<GattCharacteristic> GetCharacteristicAsync(Guid uuid)
@@ -424,7 +493,8 @@ internal sealed class DeviceConnection : IAsyncDisposable
     private static byte[] ReadBytes(IBuffer buffer)
     {
         var data = new byte[buffer.Length];
-        DataReader.FromBuffer(buffer).ReadBytes(data);
+        using var reader = DataReader.FromBuffer(buffer);
+        reader.ReadBytes(data);
         return data;
     }
 }

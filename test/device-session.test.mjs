@@ -5,11 +5,10 @@ import { MockBluetoothTransport } from "../dist/bluetooth/mock-transport.js";
 import { ReadHoldingRegisters } from "../dist/core/commands.js";
 import { appendModbusCrc } from "../dist/core/crc.js";
 
-await run();
-
 async function run() {
   await testChunkedResponse();
   await testCommandTimeout();
+  await testDisconnectFailureStillResetsSessionState();
   console.log("device-session smoke test passed");
 }
 
@@ -53,6 +52,30 @@ async function testCommandTimeout() {
   assert.equal(session.state, "not_connected");
 }
 
+async function testDisconnectFailureStillResetsSessionState() {
+  const transport = new DisconnectFailingTransport();
+  const session = new DeviceSession("00:11:22:33:44:55", transport);
+  session.name = "AC5001234567890";
+  session.state = "ready";
+
+  await assert.rejects(session.disconnect(), /disconnect failed/);
+
+  assert.equal(session.state, "not_connected");
+  assert.equal(session.name, null);
+}
+
+class DisconnectFailingTransport {
+  async connect() {}
+  async disconnect() {
+    throw new Error("disconnect failed");
+  }
+  async readCharacteristic() {
+    return new Uint8Array(0);
+  }
+  async writeCharacteristic() {}
+  async subscribe() {}
+}
+
 function asciiBytes(value) {
   return new Uint8Array(Buffer.from(value, "ascii"));
 }
@@ -61,3 +84,5 @@ function fullResponse(registerBytes) {
   const body = new Uint8Array([0x01, 0x03, registerBytes.length, ...registerBytes]);
   return appendModbusCrc(body);
 }
+
+await run();

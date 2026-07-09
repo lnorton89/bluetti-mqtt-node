@@ -56,7 +56,11 @@ export class BluettiMqttServer {
       } catch (error) {
         this.logger.warn("Bluetooth cleanup failed", { error: formatError(error) });
       }
-      await this.mqttBridge.stop();
+      try {
+        await this.mqttBridge.stop();
+      } catch (error) {
+        this.logger.warn("MQTT cleanup failed", { error: formatError(error) });
+      }
       this.logger.info("Stopped device polling", { addresses: this.manager.addresses });
     }
   }

@@ -92,8 +92,12 @@ export class DeviceSession {
   async disconnect(): Promise<void> {
     this.clearPendingState();
     this.state = DeviceSessionState.Disconnecting;
-    await this.transport.disconnect();
-    this.state = DeviceSessionState.NotConnected;
+    try {
+      await this.transport.disconnect();
+    } finally {
+      this.name = null;
+      this.state = DeviceSessionState.NotConnected;
+    }
   }
 
   async perform(command: DeviceCommand): Promise<Uint8Array> {

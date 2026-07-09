@@ -32,6 +32,7 @@ export interface BluettiMqttClientOptions {
 export interface RawMqttClientLike {
   subscribe(topic: string): Promise<unknown> | unknown;
   on(event: "message", listener: (topic: string, payload: Buffer) => void): unknown;
+  off(event: "message", listener: (topic: string, payload: Buffer) => void): unknown;
   publish(topic: string, payload: string): Promise<unknown> | unknown;
   endAsync(): Promise<unknown>;
 }
@@ -44,6 +45,8 @@ export type MqttConnector = (
 export class BluettiMqttBridge {
   private readonly devices = new Map<string, BluettiDevice>();
   private rawClient: RawMqttClientLike | null = null;
+  private removeParserListener: (() => void) | null = null;
+  private messageListener: ((topic: string, payload: Buffer) => void) | null = null;
 
   constructor(
     private readonly bus: EventBus<BluettiDevice, BluettiDevice, DeviceCommand>,
@@ -53,6 +56,10 @@ export class BluettiMqttBridge {
   ) {}
 
   async run(): Promise<void> {
+    if (this.rawClient !== null) {
+      throw new Error("MQTT bridge is already running");
+    }
+
     const connectOptions: { username?: string; password?: string } = {};
     if (this.options.username !== undefined) {
       connectOptions.username = this.options.username;
@@ -61,35 +68,43 @@ export class BluettiMqttBridge {
       connectOptions.password = this.options.password;
     }
 
-    this.rawClient = await this.connector(this.options.url, connectOptions);
+    const client = await this.connector(this.options.url, connectOptions);
+    this.rawClient = client;
     this.logger.info("Connected to MQTT broker", { url: this.options.url });
 
-    this.bus.addParserListener(async (message) => {
-      await this.handleParserMessage(message);
-    });
-    this.bus.addCommandListener(async (_message) => {
-      // The bus fan-out is used for dispatch. The MQTT bridge only publishes incoming parser messages.
-    });
+    try {
+      await client.subscribe("bluetti/command/#");
+      this.logger.info("Subscribed to MQTT command topics", { topic: "bluetti/command/#" });
 
-    await this.rawClient.subscribe("bluetti/command/#");
-    this.logger.info("Subscribed to MQTT command topics", { topic: "bluetti/command/#" });
-    this.rawClient.on("message", (topic, payload) => {
-      void this.handleIncomingCommand(topic, new Uint8Array(payload)).catch((error: unknown) => {
-        // Invalid command payloads and unsupported setters should not crash the long-running bridge.
-        this.logger.warn("Ignoring invalid MQTT command payload", {
-          topic,
-          error: stringifyError(error),
-        });
+      this.removeParserListener = this.bus.addParserListener(async (message) => {
+        await this.handleParserMessage(message);
       });
-    });
+      this.messageListener = (topic, payload) => {
+        void this.handleIncomingCommand(topic, new Uint8Array(payload)).catch((error: unknown) => {
+          // Invalid command payloads and unsupported setters should not crash the long-running bridge.
+          this.logger.warn("Ignoring invalid MQTT command payload", {
+            topic,
+            error: stringifyError(error),
+          });
+        });
+      };
+      client.on("message", this.messageListener);
+    } catch (error) {
+      try {
+        await this.cleanupClient(client);
+      } catch {
+        // Preserve the startup failure; local listener state is already cleared.
+      }
+      throw error;
+    }
   }
 
   async stop(): Promise<void> {
-    if (this.rawClient !== null) {
-      await this.rawClient.endAsync();
-      this.logger.info("Disconnected from MQTT broker", { url: this.options.url });
-      this.rawClient = null;
-    }
+    const client = this.rawClient;
+    if (client === null) return;
+
+    await this.cleanupClient(client);
+    this.logger.info("Disconnected from MQTT broker", { url: this.options.url });
   }
 
   private async handleParserMessage(message: ParserMessage<BluettiDevice>): Promise<void> {
@@ -140,6 +155,30 @@ export class BluettiMqttBridge {
     }
     return this.rawClient;
   }
+
+  private async cleanupClient(client: RawMqttClientLike): Promise<void> {
+    const failures: unknown[] = [];
+    this.rawClient = null;
+    this.removeParserListener?.();
+    this.removeParserListener = null;
+    if (this.messageListener !== null) {
+      try {
+        client.off("message", this.messageListener);
+      } catch (error) {
+        failures.push(error);
+      }
+      this.messageListener = null;
+    }
+    try {
+      await client.endAsync();
+    } catch (error) {
+      failures.push(error);
+    }
+
+    if (failures.length > 0) {
+      throw new AggregateError(failures, "Failed to clean up MQTT client");
+    }
+  }
 }
 
 export class BasicMqttClient implements MqttClient {
@@ -160,8 +199,18 @@ export class BasicMqttClient implements MqttClient {
   }
 
   async subscribe(topic: string, onMessage: (message: ReceivedMqttMessage) => Promise<void> | void): Promise<void> {
+    const previous = this.callbacks.get(topic);
     this.callbacks.set(topic, onMessage);
-    await this.rawClient.subscribeAsync(topic);
+    try {
+      await this.rawClient.subscribeAsync(topic);
+    } catch (error) {
+      if (previous === undefined) {
+        this.callbacks.delete(topic);
+      } else {
+        this.callbacks.set(topic, previous);
+      }
+      throw error;
+    }
   }
 }
 

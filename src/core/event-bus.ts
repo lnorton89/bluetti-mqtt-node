@@ -14,12 +14,18 @@ export class EventBus<ParserDevice, CommandDevice, CommandType> {
   private readonly parserListeners = new Set<AsyncListener<ParserMessage<ParserDevice>>>();
   private readonly commandListeners = new Set<AsyncListener<CommandMessage<CommandDevice, CommandType>>>();
 
-  addParserListener(listener: AsyncListener<ParserMessage<ParserDevice>>): void {
+  addParserListener(listener: AsyncListener<ParserMessage<ParserDevice>>): () => void {
     this.parserListeners.add(listener);
+    return () => {
+      this.parserListeners.delete(listener);
+    };
   }
 
-  addCommandListener(listener: AsyncListener<CommandMessage<CommandDevice, CommandType>>): void {
+  addCommandListener(listener: AsyncListener<CommandMessage<CommandDevice, CommandType>>): () => void {
     this.commandListeners.add(listener);
+    return () => {
+      this.commandListeners.delete(listener);
+    };
   }
 
   async publishParserMessage(message: ParserMessage<ParserDevice>): Promise<void> {
