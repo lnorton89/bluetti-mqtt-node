@@ -1,20 +1,15 @@
 import {
   BadConnectionError,
-  CommandTimeoutError,
-  DeviceBusyError,
-  ModbusError,
-  ParseError,
 } from "../bluetooth/errors.js";
 import { MultiDeviceManager } from "../bluetooth/manager.js";
-import { DeviceCommand, ReadHoldingRegisters } from "../core/commands.js";
-import { EventBus, type CommandMessage } from "../core/event-bus.js";
+import { DeviceCommand } from "../core/commands.js";
+import { EventBus } from "../core/event-bus.js";
 import { ConsoleLogger, type Logger } from "../core/logger.js";
 import { createDeviceFromAdvertisement } from "../devices/registry.js";
 import type { BluettiDevice } from "../devices/device.js";
 import {
   applyBusyBackoff,
   BUSY_WARNING_INTERVAL_MS,
-  type CommandResult,
   createDevicePollingState,
   createDeviceTelemetry,
   type DevicePollingState,
@@ -28,6 +23,7 @@ import {
   summarizeTelemetry,
   TELEMETRY_SUMMARY_INTERVAL_MS,
 } from "./polling-state.js";
+import { DeviceCommandRunner } from "./device-executor.js";
 
 // Re-export so existing imports from device-handler.js continue to work.
 export type { PollingOptions } from "./polling-state.js";
@@ -65,6 +61,8 @@ export class DeviceHandler {
   private readonly telemetry = new Map<string, DeviceTelemetry>();
   /** Per-device promise-chain mutex queues for serialized work. */
   private readonly deviceQueues = new Map<string, Promise<void>>();
+  /** Delegated command execution with error classification. */
+  private readonly executor: DeviceCommandRunner;
   /** Whether the event bus command listener has been installed. */
   private commandListenerAttached = false;
   /** Whether {@link stop} has been requested. */
@@ -93,6 +91,14 @@ export class DeviceHandler {
     private readonly logger: Logger = new ConsoleLogger("info"),
   ) {
     this.defaultPollingOptions = normalizePollingOptions(intervalMsOrOptions);
+    this.executor = new DeviceCommandRunner(
+      manager,
+      bus,
+      (addr) => this.getTelemetry(addr),
+      (addr, work) => this.enqueueDeviceWork(addr, work),
+      () => this.stopRequested,
+      (ms) => this.sleep(ms),
+    );
   }
 
   /**
@@ -110,7 +116,7 @@ export class DeviceHandler {
     await this.manager.connectAll();
     if (!this.commandListenerAttached) {
       this.bus.addCommandListener(async (message) => {
-        await this.handleCommand(message);
+        await this.executor.handleCommand(message);
       });
       this.commandListenerAttached = true;
     }
@@ -156,7 +162,7 @@ export class DeviceHandler {
     }
 
     const state = this.getPollingState(address);
-    await this.runCommandSet(address, device, device.pollingCommands, state);
+    await this.executor.runCommandSet(address, device, device.pollingCommands, state);
   }
 
   /**
@@ -208,7 +214,7 @@ export class DeviceHandler {
           telemetry.fastCycleCount += 1;
         }
 
-        const result = await this.runCommandSet(address, device, commands, state);
+        const result = await this.executor.runCommandSet(address, device, commands, state);
 
         if (result === "connection_error") {
           if (this.runOnce) {
@@ -223,7 +229,7 @@ export class DeviceHandler {
         }
 
         if (shouldRunFull && result !== "busy") {
-          const packResult = await this.runPackCommands(address, device, state);
+          const packResult = await this.executor.runPackCommands(address, device, state);
           if (packResult === "connection_error") {
             if (this.runOnce) {
               break;
@@ -364,230 +370,6 @@ export class DeviceHandler {
       wake();
     }
     this.sleepWaiters.clear();
-  }
-
-  /**
-   * Dispatches an external command to the target device's session.
-   *
-   * @param message - Command message from the event bus.
-   *
-   * @remarks
-   * Work is enqueued through {@link enqueueDeviceWork} so it does not overlap
-   * with an in-progress polling cycle for the same device.
-   */
-  private async handleCommand(message: CommandMessage<BluettiDevice, DeviceCommand>): Promise<void> {
-    const telemetry = this.getTelemetry(message.device.address);
-    await this.enqueueDeviceWork(message.device.address, async () => {
-      const session = this.manager.getSession(message.device.address);
-      telemetry.commandWriteCount += 1;
-      await session.perform(message.command);
-    });
-  }
-
-  /**
-   * Polls per-battery-pack register windows, switching the active pack first.
-   *
-   * @param address - Bluetooth MAC address of the device.
-   * @param device - Device model with pack polling commands.
-   * @param pollingState - Mutable polling schedule state.
-   * @returns {@link CommandResult} indicating the outcome of the pack scan.
-   *
-   * @remarks
-   * For devices with multiple packs and a writable `pack_num` field, this
-   * method iterates packs 1 through `packNumMax`, writes the pack selector,
-   * waits for the device to settle, then runs the pack polling command set.
-   * If a pack switch fails with an expected error, that pack is skipped.
-   */
-  private async runPackCommands(
-    address: string,
-    device: BluettiDevice,
-    pollingState: DevicePollingState,
-  ): Promise<CommandResult> {
-    if (device.packPollingCommands.length === 0) {
-      return "ok";
-    }
-
-    for (let pack = 1; pack <= device.packNumMax; pack += 1) {
-      if (this.stopRequested) {
-        break;
-      }
-
-      if (device.packNumMax > 1 && device.hasFieldSetter("pack_num")) {
-        const switched = await this.trySelectPack(address, device, pack, pollingState);
-        if (switched === "busy") {
-          return "busy";
-        }
-        if (switched === "connection_error") {
-          return "connection_error";
-        }
-        if (switched === "expected_error") {
-          continue;
-        }
-      }
-
-      const result = await this.runCommandSet(address, device, device.packPollingCommands, pollingState);
-      if (result === "busy") {
-        return "busy";
-      }
-    }
-
-    return "ok";
-  }
-
-  /**
-   * Executes a sequence of read commands with inter-command delays.
-   *
-   * @param address - Bluetooth MAC address of the device.
-   * @param device - Device model for field decoding.
-   * @param commands - Ordered list of read commands to execute.
-   * @param pollingState - Mutable polling schedule state (used for delay).
-   * @returns `"ok"` if all succeeded, `"expected_error"` if a recoverable
-   *   error occurred, or `"busy"`/`"connection_error"` to abort the set.
-   *
-   * @remarks
-   * Stops early on `busy` or `connection_error`. Accumulates `expected_error`
-   * results so the caller knows the set was partially degraded.
-   */
-  private async runCommandSet(
-    address: string,
-    device: BluettiDevice,
-    commands: readonly ReadHoldingRegisters[],
-    pollingState: DevicePollingState,
-  ): Promise<CommandResult> {
-    if (commands.length === 0) {
-      return "ok";
-    }
-
-    let sawExpectedError = false;
-
-    for (let index = 0; index < commands.length; index += 1) {
-      if (this.stopRequested) {
-        break;
-      }
-
-      const result = await this.executeReadCommand(address, device, commands[index]!);
-      if (result === "busy" || result === "connection_error") {
-        return result;
-      }
-      if (result === "expected_error") {
-        sawExpectedError = true;
-      }
-
-      const hasMoreCommands = index < commands.length - 1;
-      if (hasMoreCommands && pollingState.commandDelayMs > 0) {
-        await this.sleep(pollingState.commandDelayMs);
-      }
-    }
-
-    return sawExpectedError ? "expected_error" : "ok";
-  }
-
-  /**
-   * Performs one read command, publishes parsed telemetry, and records metrics.
-   *
-   * @param address - Bluetooth MAC address of the device.
-   * @param device - Device model for field decoding.
-   * @param command - Read command to execute.
-   * @returns {@link CommandResult} classifying the outcome.
-   * @throws {Error} For unexpected errors that are not MODBUS/parse/timeout/busy/
-   *   connection errors.
-   *
-   * @remarks
-   * On success, parsed fields are published to the event bus via
-   * {@link EventBus.publishParserMessage}. Command duration is always recorded
-   * in the `finally` block, even when an error is thrown.
-   */
-  private async executeReadCommand(
-    address: string,
-    device: BluettiDevice,
-    command: ReadHoldingRegisters,
-  ): Promise<CommandResult> {
-    const telemetry = this.getTelemetry(address);
-    const startedAt = Date.now();
-
-    try {
-      await this.enqueueDeviceWork(address, async () => {
-        const session = this.manager.getSession(address);
-        const response = await session.perform(command);
-        const parsed = device.parse(command.startingAddress, command.parseResponse(response));
-        if (Object.keys(parsed).length > 0) {
-          telemetry.parserPublishCount += 1;
-          await this.bus.publishParserMessage({ device, parsed });
-        }
-      });
-      telemetry.successfulCommandCount += 1;
-      return "ok";
-    } catch (error) {
-      if (error instanceof DeviceBusyError) {
-        telemetry.lastBusyAt = new Date().toISOString();
-        return "busy";
-      }
-      if (error instanceof BadConnectionError) {
-        telemetry.expectedErrorCount += 1;
-        telemetry.lastErrorAt = new Date().toISOString();
-        return "connection_error";
-      }
-      if (
-        error instanceof CommandTimeoutError
-        || error instanceof ModbusError
-        || error instanceof ParseError
-      ) {
-        telemetry.expectedErrorCount += 1;
-        telemetry.lastErrorAt = new Date().toISOString();
-        return "expected_error";
-      }
-      throw error;
-    } finally {
-      const commandDurationMs = Date.now() - startedAt;
-      telemetry.totalCommandDurationMs += commandDurationMs;
-      telemetry.maxCommandDurationMs = Math.max(telemetry.maxCommandDurationMs, commandDurationMs);
-    }
-  }
-
-  /**
-   * Writes the `pack_num` setter and waits for the device to settle.
-   *
-   * @param address - Bluetooth MAC address of the device.
-   * @param device - Device model with a writable `pack_num` field.
-   * @param pack - Pack number to select (1-based).
-   * @param pollingState - Mutable polling schedule state (used for delay).
-   * @returns {@link CommandResult} classifying the outcome.
-   * @throws {Error} For unexpected errors.
-   *
-   * @remarks
-   * After writing the setter, waits at least 500 ms (or the current command
-   * delay, whichever is larger) for the device to switch its active pack data.
-   */
-  private async trySelectPack(
-    address: string,
-    device: BluettiDevice,
-    pack: number,
-    pollingState: DevicePollingState,
-  ): Promise<CommandResult> {
-    try {
-      await this.enqueueDeviceWork(address, async () => {
-        const setter = device.buildSetterCommand("pack_num", pack);
-        await this.manager.getSession(address).perform(setter);
-      });
-
-      await this.sleep(Math.max(500, pollingState.commandDelayMs));
-      return "ok";
-    } catch (error) {
-      if (error instanceof DeviceBusyError) {
-        return "busy";
-      }
-      if (error instanceof BadConnectionError) {
-        return "connection_error";
-      }
-      if (
-        error instanceof CommandTimeoutError
-        || error instanceof ModbusError
-        || error instanceof ParseError
-      ) {
-        return "expected_error";
-      }
-      throw error;
-    }
   }
 
   /**
