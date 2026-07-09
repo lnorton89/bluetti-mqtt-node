@@ -40,12 +40,31 @@ async function main(): Promise<void> {
 
 	const client = new WindowsHelperClient();
 	let transport: BluetoothTransport | null = null;
-	let operationFailed = false;
+	let cleanupComplete = false;
+	const cleanup = async (reportDisconnectError: boolean): Promise<void> => {
+		if (cleanupComplete) {
+			return;
+		}
+
+		cleanupComplete = true;
+		if (transport !== null) {
+			try {
+				await transport.disconnect();
+			} catch (error) {
+				if (reportDisconnectError) {
+					throw error;
+				}
+			}
+		}
+		client.dispose();
+	};
+
 	try {
 		const runtime = createWindowsHelperRuntime(client);
 		if (!address) {
 			const devices = await runtime.discovery?.discover();
 			console.log(JSON.stringify(devices ?? [], null, 2));
+			await cleanup(true);
 			return;
 		}
 
@@ -69,24 +88,10 @@ async function main(): Promise<void> {
 			command.parseResponse(response),
 		);
 		console.log(JSON.stringify(parsed, bigintReplacer, 2));
+		await cleanup(true);
 	} catch (error) {
-		operationFailed = true;
+		await cleanup(false);
 		throw error;
-	} finally {
-		let disconnectError: unknown;
-		if (transport !== null) {
-			try {
-				await transport.disconnect();
-			} catch (error) {
-				if (!operationFailed) {
-					disconnectError = error;
-				}
-			}
-		}
-		client.dispose();
-		if (disconnectError !== undefined) {
-			throw disconnectError;
-		}
 	}
 }
 

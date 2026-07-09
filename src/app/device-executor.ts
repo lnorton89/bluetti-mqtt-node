@@ -113,16 +113,12 @@ export class DeviceCommandRunner {
 
 		let sawExpectedError = false;
 
-		for (let index = 0; index < commands.length; index += 1) {
+		for (const [index, command] of commands.entries()) {
 			if (this.isStopRequested()) {
 				break;
 			}
 
-			const result = await this.executeReadCommand(
-				address,
-				device,
-				commands[index]!,
-			);
+			const result = await this.executeReadCommand(address, device, command);
 			if (result === "busy" || result === "connection_error") {
 				return result;
 			}

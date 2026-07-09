@@ -11,7 +11,7 @@
  * - **bluetooth** — transport abstraction, session state machine, helper client
  * - **devices** — device models with typed field parsing for supported hardware
  * - **app** — polling orchestration and runtime server wiring
- * - **mqtt** — MQTT bridge for state publishing and command ingestion
+ * - **broker** — MQTT bridge for state publishing and command ingestion
  *
  * @packageDocumentation
  */
@@ -23,6 +23,7 @@ export * from "@bluetooth/helper-protocol.js";
 export * from "@bluetooth/manager.js";
 export * from "@bluetooth/mock-transport.js";
 export * from "@bluetooth/transport.js";
+export * from "@broker/client.js";
 export * from "@core/commands.js";
 export * from "@core/crc.js";
 export * from "@core/event-bus.js";
@@ -35,4 +36,3 @@ export * from "@devices/enums.js";
 export * from "@devices/field.js";
 export * from "@devices/registry.js";
 export * from "@devices/struct.js";
-export * from "@mqtt/client.js";

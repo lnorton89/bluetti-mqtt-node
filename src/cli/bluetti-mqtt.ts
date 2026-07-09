@@ -5,11 +5,13 @@ import {
 	createWindowsHelperRuntime,
 	WindowsHelperClient,
 } from "@bluetooth/helper-client.js";
+import type { MqttTlsOptions } from "@broker/client.js";
 import { ConsoleLogger, type LogLevel } from "@core/logger.js";
 import {
 	parseIntervalSeconds,
 	parseLogLevel,
 	readConfigFile,
+	readTlsFile,
 	requireValue,
 } from "./cli-config.js";
 import {
@@ -29,6 +31,12 @@ Options:
   --config <path>       Read runtime options from a JSON config file
   --username <value>    MQTT username
   --password <value>    MQTT password
+  --mqtt-ca <path>      CA certificate PEM file for MQTT TLS
+  --mqtt-cert <path>    Client certificate PEM file for MQTT mutual TLS
+  --mqtt-key <path>     Client private key PEM file for MQTT mutual TLS
+  --mqtt-servername <name>
+                        TLS server name override
+  --mqtt-insecure       Allow unauthorized MQTT TLS server certificates
   --interval <seconds>  Poll interval in seconds for continuous mode
   --log-level <level>   debug, info, warn, or error
   --once                Poll and publish once, then exit
@@ -62,12 +70,16 @@ async function main(): Promise<void> {
 			url: string;
 			username?: string;
 			password?: string;
+			tls?: MqttTlsOptions;
 		} = { url: args.brokerUrl };
 		if (args.username !== undefined) {
 			mqttOptions.username = args.username;
 		}
 		if (args.password !== undefined) {
 			mqttOptions.password = args.password;
+		}
+		if (args.tls !== undefined) {
+			mqttOptions.tls = args.tls;
 		}
 
 		const server = new BluettiMqttServer({
@@ -108,6 +120,7 @@ async function parseArgs(argv: readonly string[]): Promise<{
 	brokerUrl: string | undefined;
 	username: string | undefined;
 	password: string | undefined;
+	tls: MqttTlsOptions | undefined;
 	intervalMs: number;
 	runOnce: boolean;
 	addresses: string[];
@@ -118,6 +131,11 @@ async function parseArgs(argv: readonly string[]): Promise<{
 	let brokerUrl: string | undefined;
 	let username: string | undefined;
 	let password: string | undefined;
+	let tlsCaPath: string | undefined;
+	let tlsCertPath: string | undefined;
+	let tlsKeyPath: string | undefined;
+	let tlsServername: string | undefined;
+	let tlsRejectUnauthorized: boolean | undefined;
 	let intervalMs = 0;
 	let runOnce = false;
 	let help = false;
@@ -146,6 +164,25 @@ async function parseArgs(argv: readonly string[]): Promise<{
 			case "--password":
 				password = requireValue(argv, index, HELP_TEXT);
 				index += 1;
+				break;
+			case "--mqtt-ca":
+				tlsCaPath = requireValue(argv, index, HELP_TEXT);
+				index += 1;
+				break;
+			case "--mqtt-cert":
+				tlsCertPath = requireValue(argv, index, HELP_TEXT);
+				index += 1;
+				break;
+			case "--mqtt-key":
+				tlsKeyPath = requireValue(argv, index, HELP_TEXT);
+				index += 1;
+				break;
+			case "--mqtt-servername":
+				tlsServername = requireValue(argv, index, HELP_TEXT);
+				index += 1;
+				break;
+			case "--mqtt-insecure":
+				tlsRejectUnauthorized = false;
 				break;
 			case "--interval":
 				intervalMs = parseIntervalSeconds(
@@ -177,6 +214,12 @@ async function parseArgs(argv: readonly string[]): Promise<{
 		brokerUrl = brokerUrl ?? config.broker;
 		username = username ?? config.username;
 		password = password ?? config.password;
+		tlsCaPath = tlsCaPath ?? config.tls?.caPath;
+		tlsCertPath = tlsCertPath ?? config.tls?.certPath;
+		tlsKeyPath = tlsKeyPath ?? config.tls?.keyPath;
+		tlsServername = tlsServername ?? config.tls?.servername;
+		tlsRejectUnauthorized =
+			tlsRejectUnauthorized ?? config.tls?.rejectUnauthorized;
 		intervalMs =
 			intervalMs > 0
 				? intervalMs
@@ -190,16 +233,55 @@ async function parseArgs(argv: readonly string[]): Promise<{
 		}
 	}
 
+	const tls = await buildMqttTlsOptions({
+		caPath: tlsCaPath,
+		certPath: tlsCertPath,
+		keyPath: tlsKeyPath,
+		rejectUnauthorized: tlsRejectUnauthorized,
+		servername: tlsServername,
+	});
+
 	return {
 		brokerUrl,
 		username,
 		password,
+		tls,
 		intervalMs,
 		runOnce,
 		addresses,
 		help,
 		logLevel,
 	};
+}
+
+/**
+ * Loads optional MQTT TLS file paths into mqtt.js TLS options.
+ */
+async function buildMqttTlsOptions(options: {
+	caPath: string | undefined;
+	certPath: string | undefined;
+	keyPath: string | undefined;
+	rejectUnauthorized: boolean | undefined;
+	servername: string | undefined;
+}): Promise<MqttTlsOptions | undefined> {
+	const tls: MqttTlsOptions = {};
+	if (options.caPath !== undefined) {
+		tls.ca = await readTlsFile(options.caPath, "CA");
+	}
+	if (options.certPath !== undefined) {
+		tls.cert = await readTlsFile(options.certPath, "client certificate");
+	}
+	if (options.keyPath !== undefined) {
+		tls.key = await readTlsFile(options.keyPath, "client key");
+	}
+	if (options.rejectUnauthorized !== undefined) {
+		tls.rejectUnauthorized = options.rejectUnauthorized;
+	}
+	if (options.servername !== undefined) {
+		tls.servername = options.servername;
+	}
+
+	return Object.keys(tls).length > 0 ? tls : undefined;
 }
 
 runCli(main);

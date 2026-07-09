@@ -46,7 +46,7 @@ export class HelpError extends Error {}
  * @remarks
  * The original operation error takes precedence over a secondary disconnect
  * failure; successful work still reports disconnect failures to the caller.
- * The helper client is always disposed in the `finally` block.
+ * The helper client is always disposed during cleanup.
  *
  * @see ConnectedDeviceContext
  */
@@ -56,7 +56,25 @@ export async function withConnectedDevice<T>(
 ): Promise<T> {
 	const client = new WindowsHelperClient();
 	let transport: BluetoothTransport | null = null;
-	let operationFailed = false;
+	let cleanupComplete = false;
+	const cleanup = async (reportDisconnectError: boolean): Promise<void> => {
+		if (cleanupComplete) {
+			return;
+		}
+
+		cleanupComplete = true;
+		if (transport !== null) {
+			try {
+				await transport.disconnect();
+			} catch (error) {
+				if (reportDisconnectError) {
+					throw error;
+				}
+			}
+		}
+		client.dispose();
+	};
+
 	try {
 		const runtime = createWindowsHelperRuntime(client);
 		transport = runtime.transportFactory.create();
@@ -68,25 +86,12 @@ export async function withConnectedDevice<T>(
 		}
 
 		const device = createDeviceFromAdvertisement(address, session.name);
-		return await work({ address, session, device });
+		const result = await work({ address, session, device });
+		await cleanup(true);
+		return result;
 	} catch (error) {
-		operationFailed = true;
+		await cleanup(false);
 		throw error;
-	} finally {
-		let disconnectError: unknown;
-		if (transport !== null) {
-			try {
-				await transport.disconnect();
-			} catch (error) {
-				if (!operationFailed) {
-					disconnectError = error;
-				}
-			}
-		}
-		client.dispose();
-		if (disconnectError !== undefined) {
-			throw disconnectError;
-		}
 	}
 }
 

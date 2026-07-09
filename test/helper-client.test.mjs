@@ -19,6 +19,8 @@ async function run() {
 	testGattUnreachableErrorMapping();
 	testGattWriteUnreachableErrorMapping();
 	testMalformedJsonBeforeReady();
+	await testPublicRequestMethodsValidatePayloads();
+	await testScanFiltersMalformedDevices();
 	await testTransportSubscribeRollsBackCallback();
 	await testTransportDisconnectCleansLocalStateOnFailure();
 	await testTransportConnectRollsBackWhenNotificationWiringFails();
@@ -197,6 +199,88 @@ function makeClientHarness() {
 	client.pending = new Map();
 	client.notificationListeners = new Set();
 	client.readyResolved = false;
+	client.requestTimeoutMs = 30_000;
+	return client;
+}
+
+/** Public helper methods translate request payloads and reject malformed helper responses. */
+async function testPublicRequestMethodsValidatePayloads() {
+	const client = makeRequestHarness({
+		connect: { sessionId: "session-1", address: "00:11:22:33:44:55", name: "AC500123" },
+		readCharacteristic: { dataBase64: Buffer.from([4, 5, 6]).toString("base64") },
+	});
+
+	assert.deepEqual(await client.connect("00:11:22:33:44:55"), {
+		sessionId: "session-1",
+		address: "00:11:22:33:44:55",
+		name: "AC500123",
+	});
+	assert.deepEqual(
+		await client.readCharacteristic("session-1", "read-uuid"),
+		new Uint8Array([4, 5, 6]),
+	);
+	await client.writeCharacteristic("session-1", "write-uuid", new Uint8Array([1, 2]), false);
+	await client.subscribe("session-1", "notify-uuid");
+	await client.disconnect("session-1");
+
+	assert.deepEqual(client.calls, [
+		["connect", { address: "00:11:22:33:44:55" }, undefined],
+		["readCharacteristic", { sessionId: "session-1", uuid: "read-uuid" }, undefined],
+		[
+			"writeCharacteristic",
+			{
+				sessionId: "session-1",
+				uuid: "write-uuid",
+				dataBase64: Buffer.from([1, 2]).toString("base64"),
+				withoutResponse: false,
+			},
+			undefined,
+		],
+		["subscribe", { sessionId: "session-1", uuid: "notify-uuid" }, undefined],
+		["disconnect", { sessionId: "session-1" }, undefined],
+	]);
+
+	await assert.rejects(
+		makeRequestHarness({ connect: { sessionId: "session-1" } }).connect("address"),
+		/invalid connect payload/,
+	);
+	await assert.rejects(
+		makeRequestHarness({ readCharacteristic: {} }).readCharacteristic("session-1", "uuid"),
+		/invalid readCharacteristic payload/,
+	);
+}
+
+/** Scans return only well-formed devices and use the scan timeout plus buffer. */
+async function testScanFiltersMalformedDevices() {
+	const client = makeRequestHarness({
+		scan: {
+			devices: [
+				{ address: "00:11:22:33:44:55", name: "AC500123" },
+				{ address: "missing-name" },
+				null,
+				{ address: "AA:BB:CC:DD:EE:FF", name: "EB3A123" },
+			],
+		},
+	});
+
+	assert.deepEqual(await client.discover(), [
+		{ address: "00:11:22:33:44:55", name: "AC500123" },
+		{ address: "AA:BB:CC:DD:EE:FF", name: "EB3A123" },
+	]);
+	assert.deepEqual(await makeRequestHarness({ scan: {} }).scan(), []);
+	assert.equal(client.calls[0][0], "scan");
+	assert.deepEqual(client.calls[0][1], { timeoutMs: 5000 });
+	assert.equal(client.calls[0][2], 30000);
+}
+
+/** Creates a helper client harness whose private request method is replaced by a recorder. */
+function makeRequestHarness(responses) {
+	const client = makeClientHarness();
+	client.calls = [];
+	client.request = async (command, argumentsObject, timeoutMs) => {
+		client.calls.push([command, argumentsObject, timeoutMs]);
+		return responses[command];
+	};
 	return client;
 }
 

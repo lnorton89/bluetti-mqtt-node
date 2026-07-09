@@ -13,6 +13,8 @@ export interface CliConfigFile {
 	username?: string;
 	/** MQTT password. */
 	password?: string;
+	/** Optional MQTT TLS settings. */
+	tls?: CliMqttTlsConfig;
 	/** Poll interval in seconds. */
 	interval?: number;
 	/** Whether to run one cycle and exit. */
@@ -21,6 +23,20 @@ export interface CliConfigFile {
 	addresses?: readonly string[];
 	/** Minimum log level. */
 	logLevel?: LogLevel;
+}
+
+/** File-path-oriented MQTT TLS settings accepted in JSON config files. */
+export interface CliMqttTlsConfig {
+	/** Path to a CA certificate PEM file. */
+	caPath?: string;
+	/** Path to a client certificate PEM file. */
+	certPath?: string;
+	/** Path to a client private key PEM file. */
+	keyPath?: string;
+	/** Whether to reject unauthorized server certificates. */
+	rejectUnauthorized?: boolean;
+	/** Optional TLS Server Name Indication override. */
+	servername?: string;
 }
 
 /**
@@ -142,6 +158,9 @@ export async function readConfigFile(path: string): Promise<CliConfigFile> {
 	if (candidate.password !== undefined) {
 		config.password = requireConfigString(candidate.password, path, "password");
 	}
+	if (candidate.tls !== undefined) {
+		config.tls = parseTlsConfig(candidate.tls, path);
+	}
 	if (candidate.interval !== undefined) {
 		if (
 			typeof candidate.interval !== "number" ||
@@ -182,6 +201,25 @@ export async function readConfigFile(path: string): Promise<CliConfigFile> {
 }
 
 /**
+ * Reads a TLS file as UTF-8 PEM text and reports failures as CLI usage errors.
+ *
+ * @param path - Certificate/key file path.
+ * @param field - Field name used in error messages.
+ * @returns PEM file contents.
+ * @throws {UsageError} When the file cannot be read.
+ */
+export async function readTlsFile(
+	path: string,
+	field: string,
+): Promise<string> {
+	try {
+		return await readFile(path, "utf8");
+	} catch {
+		throw new UsageError(`Failed to read MQTT TLS ${field} file '${path}'.`);
+	}
+}
+
+/**
  * Validates that a config file field is a non-empty string.
  *
  * @param value - Value from the parsed JSON.
@@ -199,6 +237,51 @@ function requireConfigString(
 		throw invalidConfigValue(path, field);
 	}
 	return value;
+}
+
+/**
+ * Validates the optional nested `tls` config object.
+ *
+ * @param value - Parsed config field.
+ * @param path - Config file path for error messages.
+ * @returns Validated TLS config.
+ * @throws {UsageError} When a TLS field has the wrong type.
+ */
+function parseTlsConfig(value: unknown, path: string): CliMqttTlsConfig {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) {
+		throw invalidConfigValue(path, "tls");
+	}
+
+	const candidate = value as Record<string, unknown>;
+	const tls: CliMqttTlsConfig = {};
+	if (candidate.caPath !== undefined) {
+		tls.caPath = requireConfigString(candidate.caPath, path, "tls.caPath");
+	}
+	if (candidate.certPath !== undefined) {
+		tls.certPath = requireConfigString(
+			candidate.certPath,
+			path,
+			"tls.certPath",
+		);
+	}
+	if (candidate.keyPath !== undefined) {
+		tls.keyPath = requireConfigString(candidate.keyPath, path, "tls.keyPath");
+	}
+	if (candidate.rejectUnauthorized !== undefined) {
+		if (typeof candidate.rejectUnauthorized !== "boolean") {
+			throw invalidConfigValue(path, "tls.rejectUnauthorized");
+		}
+		tls.rejectUnauthorized = candidate.rejectUnauthorized;
+	}
+	if (candidate.servername !== undefined) {
+		tls.servername = requireConfigString(
+			candidate.servername,
+			path,
+			"tls.servername",
+		);
+	}
+
+	return tls;
 }
 
 /**

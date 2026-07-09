@@ -7,7 +7,7 @@ import {
 import { EventBus } from "../dist/core/event-bus.js";
 import { BluettiDevice } from "../dist/devices/device.js";
 import { DeviceStruct } from "../dist/devices/struct.js";
-import { BasicMqttClient, BluettiMqttBridge } from "../dist/mqtt/client.js";
+import { BasicMqttClient, BluettiMqttBridge } from "../dist/broker/client.js";
 
 /**
  * Smoke-test runner for the MQTT bridge and basic client.
@@ -18,6 +18,7 @@ import { BasicMqttClient, BluettiMqttBridge } from "../dist/mqtt/client.js";
  * rollback on subscription failure, and async callback error reporting.
  */
 async function run() {
+	await testPassesTlsOptionsToConnector();
 	await testPublishesStateTopics();
 	await testDispatchesIncomingCommand();
 	await testRejectsUnknownDeviceCommand();
@@ -26,6 +27,51 @@ async function run() {
 	await testStartupSubscriptionFailureRollsBackBridge();
 	await testBasicClientReportsAsyncCallbackFailures();
 	console.log("mqtt bridge smoke test passed");
+}
+
+/** MQTT connection options include optional TLS material when configured. */
+async function testPassesTlsOptionsToConnector() {
+	const bus = new EventBus();
+	const mqtt = new FakeRawMqttClient();
+	const connections = [];
+	const bridge = new BluettiMqttBridge(
+		bus,
+		{
+			url: "mqtts://unit-test:8883",
+			username: "user",
+			password: "pass",
+			tls: {
+				ca: "ca-pem",
+				cert: "cert-pem",
+				key: "key-pem",
+				rejectUnauthorized: false,
+				servername: "broker.local",
+			},
+		},
+		async (url, options) => {
+			connections.push({ url, options });
+			return mqtt;
+		},
+		silentLogger,
+	);
+
+	await bridge.run();
+	await bridge.stop();
+
+	assert.deepEqual(connections, [
+		{
+			url: "mqtts://unit-test:8883",
+			options: {
+				username: "user",
+				password: "pass",
+				ca: "ca-pem",
+				cert: "cert-pem",
+				key: "key-pem",
+				rejectUnauthorized: false,
+				servername: "broker.local",
+			},
+		},
+	]);
 }
 
 /** Parsed telemetry is published to individual MQTT state topics plus a _raw JSON topic. */

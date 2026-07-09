@@ -14,7 +14,7 @@
       "@devices/*": ["./src/devices/*"],
       "@app/*": ["./src/app/*"],
       "@cli/*": ["./src/cli/*"],
-      "@mqtt/*": ["./src/mqtt/*"]
+      "@broker/*": ["./src/broker/*"]
     },
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,

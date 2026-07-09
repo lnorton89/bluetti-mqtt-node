@@ -7,7 +7,11 @@ import type {
 import { ConsoleLogger, type Logger } from "@core/logger.js";
 import type { DeviceEnumValue } from "@core/types.js";
 import type { BluettiDevice } from "@devices/device.js";
-import { connectAsync, type MqttClient as RawMqttClient } from "mqtt";
+import {
+	connectAsync,
+	type IClientOptions,
+	type MqttClient as RawMqttClient,
+} from "mqtt";
 import {
 	BOOLEAN_OFF_VALUE,
 	BOOLEAN_ON_VALUE,
@@ -39,6 +43,22 @@ export interface BluettiMqttClientOptions {
 	readonly username?: string;
 	/** Optional password for broker authentication. */
 	readonly password?: string;
+	/** Optional TLS configuration for `mqtts://`, `tls://`, or secure websocket brokers. */
+	readonly tls?: MqttTlsOptions;
+}
+
+/** TLS options passed through to mqtt.js / Node TLS connection handling. */
+export interface MqttTlsOptions {
+	/** Trusted CA certificate PEM content. */
+	ca?: IClientOptions["ca"];
+	/** Client certificate PEM content for mutual TLS. */
+	cert?: IClientOptions["cert"];
+	/** Client private key PEM content for mutual TLS. */
+	key?: IClientOptions["key"];
+	/** Whether to reject unauthorized server certificates. Defaults to mqtt.js/Node behavior. */
+	rejectUnauthorized?: boolean;
+	/** Optional TLS Server Name Indication override. */
+	servername?: string;
 }
 
 /**
@@ -100,7 +120,7 @@ export interface RawMqttClientLike {
  */
 export type MqttConnector = (
 	url: string,
-	options: { username?: string; password?: string },
+	options: IClientOptions,
 ) => Promise<RawMqttClientLike>;
 
 /**
@@ -168,12 +188,29 @@ export class BluettiMqttBridge {
 			throw new Error("MQTT bridge is already running");
 		}
 
-		const connectOptions: { username?: string; password?: string } = {};
+		const connectOptions: IClientOptions = {};
 		if (this.options.username !== undefined) {
 			connectOptions.username = this.options.username;
 		}
 		if (this.options.password !== undefined) {
 			connectOptions.password = this.options.password;
+		}
+		if (this.options.tls !== undefined) {
+			if (this.options.tls.ca !== undefined) {
+				connectOptions.ca = this.options.tls.ca;
+			}
+			if (this.options.tls.cert !== undefined) {
+				connectOptions.cert = this.options.tls.cert;
+			}
+			if (this.options.tls.key !== undefined) {
+				connectOptions.key = this.options.tls.key;
+			}
+			if (this.options.tls.rejectUnauthorized !== undefined) {
+				connectOptions.rejectUnauthorized = this.options.tls.rejectUnauthorized;
+			}
+			if (this.options.tls.servername !== undefined) {
+				connectOptions.servername = this.options.tls.servername;
+			}
 		}
 
 		const client = await this.connector(this.options.url, connectOptions);
@@ -359,7 +396,7 @@ export class BluettiMqttBridge {
  */
 async function defaultMqttConnector(
 	url: string,
-	options: { username?: string; password?: string },
+	options: IClientOptions,
 ): Promise<RawMqttClientLike> {
 	return connectAsync(url, options) as unknown as RawMqttClient;
 }

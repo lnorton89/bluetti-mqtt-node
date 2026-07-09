@@ -212,11 +212,12 @@ export abstract class BluettiDevice {
 		if (field instanceof EnumField) {
 			if (typeof value === "number") {
 				encodedValue = value;
-			} else if (
-				typeof value === "string" &&
-				field.enumDefinition[value] !== undefined
-			) {
-				encodedValue = field.enumDefinition[value]!;
+			} else if (typeof value === "string") {
+				const enumValue = field.enumDefinition[value];
+				if (enumValue === undefined) {
+					throw new Error(`Field ${fieldName} expects a known enum option`);
+				}
+				encodedValue = enumValue;
 			} else {
 				throw new Error(`Field ${fieldName} expects a known enum option`);
 			}

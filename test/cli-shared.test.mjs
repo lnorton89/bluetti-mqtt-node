@@ -34,6 +34,7 @@ async function run() {
 	await testMqttCliInvalidInterval();
 	await testMqttCliConfigHelp();
 	await testMqttCliInvalidConfigJson();
+	await testMqttCliConfigTlsFiles();
 	await testMqttCliRejectsInvalidConfigValues();
 	console.log("cli shared smoke test passed");
 }
@@ -158,6 +159,66 @@ async function testMqttCliInvalidConfigJson() {
 	assert.match(error.stderr, /must be valid JSON/);
 }
 
+/** TLS config entries are validated and PEM files are read even when --help exits early. */
+async function testMqttCliConfigTlsFiles() {
+	const tempDir = await mkdtemp(join(tmpdir(), "bluetti-mqtt-node-"));
+	const caPath = join(tempDir, "ca.pem");
+	const certPath = join(tempDir, "cert.pem");
+	const keyPath = join(tempDir, "key.pem");
+	const configPath = join(tempDir, "config.json");
+	await writeFile(caPath, "ca-pem", "utf8");
+	await writeFile(certPath, "cert-pem", "utf8");
+	await writeFile(keyPath, "key-pem", "utf8");
+	await writeFile(
+		configPath,
+		JSON.stringify({
+			broker: "mqtts://127.0.0.1:8883",
+			tls: {
+				caPath,
+				certPath,
+				keyPath,
+				rejectUnauthorized: false,
+				servername: "broker.local",
+			},
+		}),
+		"utf8",
+	);
+
+	const result = await execFileAsync(
+		"node",
+		[".\\dist\\cli\\bluetti-mqtt.js", "--config", configPath, "--help"],
+		{
+			cwd: process.cwd(),
+		},
+	);
+	assert.match(result.stdout, /--mqtt-ca/);
+
+	const missingConfigPath = join(tempDir, "missing-config.json");
+	await writeFile(
+		missingConfigPath,
+		JSON.stringify({
+			broker: "mqtts://127.0.0.1:8883",
+			tls: { caPath: join(tempDir, "missing-ca.pem") },
+		}),
+		"utf8",
+	);
+	const error = await captureExecError(
+		execFileAsync(
+			"node",
+			[
+				".\\dist\\cli\\bluetti-mqtt.js",
+				"--config",
+				missingConfigPath,
+				"--help",
+			],
+			{
+				cwd: process.cwd(),
+			},
+		),
+	);
+	assert.match(error.stderr, /Failed to read MQTT TLS CA file/);
+}
+
 /** A config file with semantically invalid values (interval range, address type, etc.) is rejected. */
 async function testMqttCliRejectsInvalidConfigValues() {
 	for (const config of [
@@ -166,6 +227,9 @@ async function testMqttCliRejectsInvalidConfigValues() {
 		{ addresses: "24:4C:AB:2C:24:8E" },
 		{ once: "yes" },
 		{ logLevel: "verbose" },
+		{ tls: "yes" },
+		{ tls: { caPath: "" } },
+		{ tls: { rejectUnauthorized: "no" } },
 	]) {
 		const tempDir = await mkdtemp(join(tmpdir(), "bluetti-mqtt-node-"));
 		const configPath = join(tempDir, "bad-config.json");

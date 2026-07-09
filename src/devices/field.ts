@@ -157,6 +157,7 @@ export class DecimalArrayField extends DeviceField<readonly number[]> {
 }
 
 export class StringField extends DeviceField<string> {
+	// biome-ignore lint/complexity/noUselessConstructor: Keeps this subclass publicly constructible while DeviceField's constructor remains protected.
 	constructor(name: string, address: number, size: number) {
 		super(name, address, size);
 	}
@@ -167,6 +168,7 @@ export class StringField extends DeviceField<string> {
 }
 
 export class SwapStringField extends DeviceField<string> {
+	// biome-ignore lint/complexity/noUselessConstructor: Keeps this subclass publicly constructible while DeviceField's constructor remains protected.
 	constructor(name: string, address: number, size: number) {
 		super(name, address, size);
 	}

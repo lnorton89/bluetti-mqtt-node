@@ -16,16 +16,7 @@
 	"linter": {
 		"enabled": true,
 		"rules": {
-			"preset": "recommended",
-			"complexity": {
-				"noUselessConstructor": "off"
-			},
-			"style": {
-				"noNonNullAssertion": "off"
-			},
-			"correctness": {
-				"noUnsafeFinally": "off"
-			}
+			"preset": "recommended"
 		}
 	},
 	"javascript": {

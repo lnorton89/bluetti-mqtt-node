@@ -53,7 +53,7 @@ The project is split into a few clear layers:
   - Windows-helper transport abstraction, session state machine, helper client, mock transport
 - `src/app`
   - polling orchestration and runtime wiring
-- `src/mqtt`
+- `src/broker`
   - MQTT publishing and command-topic handling
 - `src/cli`
   - user-facing command entrypoints
