@@ -53,8 +53,10 @@
     "poll": "node ./dist/cli/poll.js",
     "prepack": "npm run build && npm run helper:publish",
     "probe": "node ./dist/cli/probe.js",
+    "lint": "biome check src/",
+    "lint:fix": "biome check --write --unsafe src/",
     "rebuild": "npm run clean && npm run build",
-    "validate": "npm run typecheck && npm test && npm run helper:build",
+    "validate": "npm run typecheck && npm run lint && npm test && npm run helper:build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && node test/run-all.mjs"
   },
@@ -62,6 +64,7 @@
     "mqtt": "^5.15.1"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.3",
     "@types/node": "^25.5.0",
     "tsc-alias": "^1.9.0",
     "typescript": "^6.0.2"
