@@ -18,22 +18,22 @@
  * @see DeviceHandler
  */
 export interface PollingOptions {
-  /** Interval between fast polling cycles (live power/state window). */
-  readonly fastIntervalMs?: number;
-  /** Interval between full polling cycles (all register windows). */
-  readonly fullIntervalMs?: number;
-  /** Delay between consecutive commands within one polling cycle. */
-  readonly commandDelayMs?: number;
-  /** Additional interval added per busy response before retrying. */
-  readonly busyPenaltyMs?: number;
-  /** Amount subtracted from intervals on each successful recovery step. */
-  readonly recoveryStepMs?: number;
-  /** Upper clamp for the fast polling interval during backoff. */
-  readonly maxFastIntervalMs?: number;
-  /** Upper clamp for the full polling interval during backoff. */
-  readonly maxFullIntervalMs?: number;
-  /** Upper clamp for the inter-command delay during backoff. */
-  readonly maxCommandDelayMs?: number;
+	/** Interval between fast polling cycles (live power/state window). */
+	readonly fastIntervalMs?: number;
+	/** Interval between full polling cycles (all register windows). */
+	readonly fullIntervalMs?: number;
+	/** Delay between consecutive commands within one polling cycle. */
+	readonly commandDelayMs?: number;
+	/** Additional interval added per busy response before retrying. */
+	readonly busyPenaltyMs?: number;
+	/** Amount subtracted from intervals on each successful recovery step. */
+	readonly recoveryStepMs?: number;
+	/** Upper clamp for the fast polling interval during backoff. */
+	readonly maxFastIntervalMs?: number;
+	/** Upper clamp for the full polling interval during backoff. */
+	readonly maxFullIntervalMs?: number;
+	/** Upper clamp for the inter-command delay during backoff. */
+	readonly maxCommandDelayMs?: number;
 }
 
 /**
@@ -42,16 +42,16 @@ export interface PollingOptions {
  * @see DeviceHandler
  */
 export interface DevicePollingState {
-  /** Timestamp (ms epoch) when the next fast cycle may start. */
-  nextFastPollAt: number;
-  /** Timestamp (ms epoch) when the next full cycle may start. */
-  nextFullPollAt: number;
-  /** Current fast-cycle interval, subject to adaptive backoff. */
-  fastIntervalMs: number;
-  /** Current full-cycle interval, subject to adaptive backoff. */
-  fullIntervalMs: number;
-  /** Current inter-command delay, subject to adaptive backoff. */
-  commandDelayMs: number;
+	/** Timestamp (ms epoch) when the next fast cycle may start. */
+	nextFastPollAt: number;
+	/** Timestamp (ms epoch) when the next full cycle may start. */
+	nextFullPollAt: number;
+	/** Current fast-cycle interval, subject to adaptive backoff. */
+	fastIntervalMs: number;
+	/** Current full-cycle interval, subject to adaptive backoff. */
+	fullIntervalMs: number;
+	/** Current inter-command delay, subject to adaptive backoff. */
+	commandDelayMs: number;
 }
 
 /**
@@ -60,44 +60,44 @@ export interface DevicePollingState {
  * @see DeviceHandler
  */
 export interface DeviceTelemetry {
-  /** Total number of polling cycles (fast + full). */
-  cycleCount: number;
-  /** Number of fast polling cycles executed. */
-  fastCycleCount: number;
-  /** Number of full polling cycles executed. */
-  fullCycleCount: number;
-  /** Number of commands that completed successfully. */
-  successfulCommandCount: number;
-  /** Number of expected errors (timeout, MODBUS, parse) encountered. */
-  expectedErrorCount: number;
-  /** Number of MODBUS busy responses received. */
-  busyErrorCount: number;
-  /** Number of external write commands dispatched via the event bus. */
-  commandWriteCount: number;
-  /** Number of parser messages published to the event bus. */
-  parserPublishCount: number;
-  /** Cumulative duration of all polling cycles in milliseconds. */
-  totalCycleDurationMs: number;
-  /** Cumulative duration of all successful commands in milliseconds. */
-  totalCommandDurationMs: number;
-  /** Longest single polling cycle duration in milliseconds. */
-  maxCycleDurationMs: number;
-  /** Longest single command duration in milliseconds. */
-  maxCommandDurationMs: number;
-  /** ISO timestamp of the last cycle start, or `null` if none yet. */
-  lastCycleStartedAt: string | null;
-  /** ISO timestamp of the last cycle completion, or `null` if none yet. */
-  lastCycleCompletedAt: string | null;
-  /** ISO timestamp of the last busy response, or `null` if none yet. */
-  lastBusyAt: string | null;
-  /** ISO timestamp of the last error, or `null` if none yet. */
-  lastErrorAt: string | null;
-  /** Timestamp (ms epoch) of the last busy warning log. */
-  lastBusyWarningAtMs: number;
-  /** Count of busy warnings suppressed since the last logged warning. */
-  suppressedBusyWarningCount: number;
-  /** Timestamp (ms epoch) of the last telemetry summary log. */
-  lastSummaryAtMs: number;
+	/** Total number of polling cycles (fast + full). */
+	cycleCount: number;
+	/** Number of fast polling cycles executed. */
+	fastCycleCount: number;
+	/** Number of full polling cycles executed. */
+	fullCycleCount: number;
+	/** Number of commands that completed successfully. */
+	successfulCommandCount: number;
+	/** Number of expected errors (timeout, MODBUS, parse) encountered. */
+	expectedErrorCount: number;
+	/** Number of MODBUS busy responses received. */
+	busyErrorCount: number;
+	/** Number of external write commands dispatched via the event bus. */
+	commandWriteCount: number;
+	/** Number of parser messages published to the event bus. */
+	parserPublishCount: number;
+	/** Cumulative duration of all polling cycles in milliseconds. */
+	totalCycleDurationMs: number;
+	/** Cumulative duration of all successful commands in milliseconds. */
+	totalCommandDurationMs: number;
+	/** Longest single polling cycle duration in milliseconds. */
+	maxCycleDurationMs: number;
+	/** Longest single command duration in milliseconds. */
+	maxCommandDurationMs: number;
+	/** ISO timestamp of the last cycle start, or `null` if none yet. */
+	lastCycleStartedAt: string | null;
+	/** ISO timestamp of the last cycle completion, or `null` if none yet. */
+	lastCycleCompletedAt: string | null;
+	/** ISO timestamp of the last busy response, or `null` if none yet. */
+	lastBusyAt: string | null;
+	/** ISO timestamp of the last error, or `null` if none yet. */
+	lastErrorAt: string | null;
+	/** Timestamp (ms epoch) of the last busy warning log. */
+	lastBusyWarningAtMs: number;
+	/** Count of busy warnings suppressed since the last logged warning. */
+	suppressedBusyWarningCount: number;
+	/** Timestamp (ms epoch) of the last telemetry summary log. */
+	lastSummaryAtMs: number;
 }
 
 /**
@@ -111,18 +111,22 @@ export interface DeviceTelemetry {
  * @see DeviceHandler.executeReadCommand
  * @see DeviceHandler.runCommandSet
  */
-export type CommandResult = "ok" | "expected_error" | "busy" | "connection_error";
+export type CommandResult =
+	| "ok"
+	| "expected_error"
+	| "busy"
+	| "connection_error";
 
 /** Default polling options used when no values are supplied. */
 export const DEFAULT_POLLING_OPTIONS: Required<PollingOptions> = {
-  fastIntervalMs: 2_500,
-  fullIntervalMs: 15_000,
-  commandDelayMs: 150,
-  busyPenaltyMs: 750,
-  recoveryStepMs: 50,
-  maxFastIntervalMs: 8_000,
-  maxFullIntervalMs: 45_000,
-  maxCommandDelayMs: 750,
+	fastIntervalMs: 2_500,
+	fullIntervalMs: 15_000,
+	commandDelayMs: 150,
+	busyPenaltyMs: 750,
+	recoveryStepMs: 50,
+	maxFastIntervalMs: 8_000,
+	maxFullIntervalMs: 45_000,
+	maxCommandDelayMs: 750,
 };
 
 /** Minimum interval between telemetry summary log entries (60 seconds). */
@@ -145,23 +149,28 @@ export const STARTUP_RETRY_DELAY_MS = 5_000;
  * is set to `max(interval × 4, default)`. A value of `0` or negative returns
  * all defaults.
  */
-export function normalizePollingOptions(intervalMsOrOptions: number | PollingOptions): Required<PollingOptions> {
-  if (typeof intervalMsOrOptions === "number") {
-    if (intervalMsOrOptions <= 0) {
-      return DEFAULT_POLLING_OPTIONS;
-    }
+export function normalizePollingOptions(
+	intervalMsOrOptions: number | PollingOptions,
+): Required<PollingOptions> {
+	if (typeof intervalMsOrOptions === "number") {
+		if (intervalMsOrOptions <= 0) {
+			return DEFAULT_POLLING_OPTIONS;
+		}
 
-    return {
-      ...DEFAULT_POLLING_OPTIONS,
-      fastIntervalMs: intervalMsOrOptions,
-      fullIntervalMs: Math.max(intervalMsOrOptions * 4, DEFAULT_POLLING_OPTIONS.fullIntervalMs),
-    };
-  }
+		return {
+			...DEFAULT_POLLING_OPTIONS,
+			fastIntervalMs: intervalMsOrOptions,
+			fullIntervalMs: Math.max(
+				intervalMsOrOptions * 4,
+				DEFAULT_POLLING_OPTIONS.fullIntervalMs,
+			),
+		};
+	}
 
-  return {
-    ...DEFAULT_POLLING_OPTIONS,
-    ...intervalMsOrOptions,
-  };
+	return {
+		...DEFAULT_POLLING_OPTIONS,
+		...intervalMsOrOptions,
+	};
 }
 
 /**
@@ -171,14 +180,16 @@ export function normalizePollingOptions(intervalMsOrOptions: number | PollingOpt
  * @returns A new polling state with `nextFastPollAt` and `nextFullPollAt` set
  *   to `0` (i.e. immediately eligible).
  */
-export function createDevicePollingState(options: Required<PollingOptions>): DevicePollingState {
-  return {
-    nextFastPollAt: 0,
-    nextFullPollAt: 0,
-    fastIntervalMs: options.fastIntervalMs,
-    fullIntervalMs: Math.max(options.fullIntervalMs, options.fastIntervalMs),
-    commandDelayMs: options.commandDelayMs,
-  };
+export function createDevicePollingState(
+	options: Required<PollingOptions>,
+): DevicePollingState {
+	return {
+		nextFastPollAt: 0,
+		nextFullPollAt: 0,
+		fastIntervalMs: options.fastIntervalMs,
+		fullIntervalMs: Math.max(options.fullIntervalMs, options.fastIntervalMs),
+		commandDelayMs: options.commandDelayMs,
+	};
 }
 
 /**
@@ -190,9 +201,9 @@ export function createDevicePollingState(options: Required<PollingOptions>): Dev
  * Used after a reconnect so polling does not immediately re-fire.
  */
 export function scheduleNextPoll(state: DevicePollingState): void {
-  const nextAt = Date.now();
-  state.nextFastPollAt = nextAt + state.fastIntervalMs;
-  state.nextFullPollAt = nextAt + state.fullIntervalMs;
+	const nextAt = Date.now();
+	state.nextFastPollAt = nextAt + state.fastIntervalMs;
+	state.nextFullPollAt = nextAt + state.fullIntervalMs;
 }
 
 /**
@@ -202,27 +213,27 @@ export function scheduleNextPoll(state: DevicePollingState): void {
  *   `null`.
  */
 export function createDeviceTelemetry(): DeviceTelemetry {
-  return {
-    cycleCount: 0,
-    fastCycleCount: 0,
-    fullCycleCount: 0,
-    successfulCommandCount: 0,
-    expectedErrorCount: 0,
-    busyErrorCount: 0,
-    commandWriteCount: 0,
-    parserPublishCount: 0,
-    totalCycleDurationMs: 0,
-    totalCommandDurationMs: 0,
-    maxCycleDurationMs: 0,
-    maxCommandDurationMs: 0,
-    lastCycleStartedAt: null,
-    lastCycleCompletedAt: null,
-    lastBusyAt: null,
-    lastErrorAt: null,
-    lastBusyWarningAtMs: 0,
-    suppressedBusyWarningCount: 0,
-    lastSummaryAtMs: 0,
-  };
+	return {
+		cycleCount: 0,
+		fastCycleCount: 0,
+		fullCycleCount: 0,
+		successfulCommandCount: 0,
+		expectedErrorCount: 0,
+		busyErrorCount: 0,
+		commandWriteCount: 0,
+		parserPublishCount: 0,
+		totalCycleDurationMs: 0,
+		totalCommandDurationMs: 0,
+		maxCycleDurationMs: 0,
+		maxCommandDurationMs: 0,
+		lastCycleStartedAt: null,
+		lastCycleCompletedAt: null,
+		lastBusyAt: null,
+		lastErrorAt: null,
+		lastBusyWarningAtMs: 0,
+		suppressedBusyWarningCount: 0,
+		lastSummaryAtMs: 0,
+	};
 }
 
 /**
@@ -232,7 +243,7 @@ export function createDeviceTelemetry(): DeviceTelemetry {
  * @returns `error.message` if non-empty, otherwise `error.name`.
  */
 export function formatError(error: Error): string {
-  return error.message || error.name;
+	return error.message || error.name;
 }
 
 /**
@@ -242,32 +253,38 @@ export function formatError(error: Error): string {
  * @returns A plain object with counts, averages, max durations, and ISO
  *   timestamps suitable for structured logging.
  */
-export function summarizeTelemetry(telemetry: DeviceTelemetry): Record<string, unknown> {
-  const averageCycleDurationMs = telemetry.cycleCount === 0
-    ? 0
-    : Math.round(telemetry.totalCycleDurationMs / telemetry.cycleCount);
-  const averageCommandDurationMs = telemetry.successfulCommandCount === 0
-    ? 0
-    : Math.round(telemetry.totalCommandDurationMs / telemetry.successfulCommandCount);
+export function summarizeTelemetry(
+	telemetry: DeviceTelemetry,
+): Record<string, unknown> {
+	const averageCycleDurationMs =
+		telemetry.cycleCount === 0
+			? 0
+			: Math.round(telemetry.totalCycleDurationMs / telemetry.cycleCount);
+	const averageCommandDurationMs =
+		telemetry.successfulCommandCount === 0
+			? 0
+			: Math.round(
+					telemetry.totalCommandDurationMs / telemetry.successfulCommandCount,
+				);
 
-  return {
-    cycleCount: telemetry.cycleCount,
-    fastCycleCount: telemetry.fastCycleCount,
-    fullCycleCount: telemetry.fullCycleCount,
-    successfulCommandCount: telemetry.successfulCommandCount,
-    expectedErrorCount: telemetry.expectedErrorCount,
-    busyErrorCount: telemetry.busyErrorCount,
-    commandWriteCount: telemetry.commandWriteCount,
-    parserPublishCount: telemetry.parserPublishCount,
-    averageCycleDurationMs,
-    averageCommandDurationMs,
-    maxCycleDurationMs: telemetry.maxCycleDurationMs,
-    maxCommandDurationMs: telemetry.maxCommandDurationMs,
-    lastCycleStartedAt: telemetry.lastCycleStartedAt,
-    lastCycleCompletedAt: telemetry.lastCycleCompletedAt,
-    lastBusyAt: telemetry.lastBusyAt,
-    lastErrorAt: telemetry.lastErrorAt,
-  };
+	return {
+		cycleCount: telemetry.cycleCount,
+		fastCycleCount: telemetry.fastCycleCount,
+		fullCycleCount: telemetry.fullCycleCount,
+		successfulCommandCount: telemetry.successfulCommandCount,
+		expectedErrorCount: telemetry.expectedErrorCount,
+		busyErrorCount: telemetry.busyErrorCount,
+		commandWriteCount: telemetry.commandWriteCount,
+		parserPublishCount: telemetry.parserPublishCount,
+		averageCycleDurationMs,
+		averageCommandDurationMs,
+		maxCycleDurationMs: telemetry.maxCycleDurationMs,
+		maxCommandDurationMs: telemetry.maxCommandDurationMs,
+		lastCycleStartedAt: telemetry.lastCycleStartedAt,
+		lastCycleCompletedAt: telemetry.lastCycleCompletedAt,
+		lastBusyAt: telemetry.lastBusyAt,
+		lastErrorAt: telemetry.lastErrorAt,
+	};
 }
 
 /**
@@ -281,10 +298,22 @@ export function summarizeTelemetry(telemetry: DeviceTelemetry): Record<string, u
  * that, and `commandDelayMs` by `recoveryStepMs`. Each is clamped to its
  * respective maximum.
  */
-export function applyBusyBackoff(state: DevicePollingState, options: Required<PollingOptions>): void {
-  state.fastIntervalMs = Math.min(state.fastIntervalMs + options.busyPenaltyMs, options.maxFastIntervalMs);
-  state.fullIntervalMs = Math.min(state.fullIntervalMs + options.busyPenaltyMs * 2, options.maxFullIntervalMs);
-  state.commandDelayMs = Math.min(state.commandDelayMs + options.recoveryStepMs, options.maxCommandDelayMs);
+export function applyBusyBackoff(
+	state: DevicePollingState,
+	options: Required<PollingOptions>,
+): void {
+	state.fastIntervalMs = Math.min(
+		state.fastIntervalMs + options.busyPenaltyMs,
+		options.maxFastIntervalMs,
+	);
+	state.fullIntervalMs = Math.min(
+		state.fullIntervalMs + options.busyPenaltyMs * 2,
+		options.maxFullIntervalMs,
+	);
+	state.commandDelayMs = Math.min(
+		state.commandDelayMs + options.recoveryStepMs,
+		options.maxCommandDelayMs,
+	);
 }
 
 /**
@@ -297,8 +326,20 @@ export function applyBusyBackoff(state: DevicePollingState, options: Required<Po
  * Each interval is reduced by its recovery step but never below the default.
  * `fullIntervalMs` recovers twice as fast as `fastIntervalMs`.
  */
-export function recoverPollingState(state: DevicePollingState, options: Required<PollingOptions>): void {
-  state.fastIntervalMs = Math.max(options.fastIntervalMs, state.fastIntervalMs - options.recoveryStepMs);
-  state.fullIntervalMs = Math.max(options.fullIntervalMs, state.fullIntervalMs - options.recoveryStepMs * 2);
-  state.commandDelayMs = Math.max(options.commandDelayMs, state.commandDelayMs - options.recoveryStepMs);
+export function recoverPollingState(
+	state: DevicePollingState,
+	options: Required<PollingOptions>,
+): void {
+	state.fastIntervalMs = Math.max(
+		options.fastIntervalMs,
+		state.fastIntervalMs - options.recoveryStepMs,
+	);
+	state.fullIntervalMs = Math.max(
+		options.fullIntervalMs,
+		state.fullIntervalMs - options.recoveryStepMs * 2,
+	);
+	state.commandDelayMs = Math.max(
+		options.commandDelayMs,
+		state.commandDelayMs - options.recoveryStepMs,
+	);
 }

@@ -8,12 +8,12 @@
  * @see HelperError
  */
 export interface HelperRequest {
-  /** Unique request ID used to correlate the response. */
-  readonly id?: string;
-  /** Command name (e.g. `"scan"`, `"connect"`, `"readCharacteristic"`). */
-  readonly command: string;
-  /** Command-specific arguments. */
-  readonly arguments?: Record<string, unknown>;
+	/** Unique request ID used to correlate the response. */
+	readonly id?: string;
+	/** Command name (e.g. `"scan"`, `"connect"`, `"readCharacteristic"`). */
+	readonly command: string;
+	/** Command-specific arguments. */
+	readonly arguments?: Record<string, unknown>;
 }
 
 /**
@@ -22,12 +22,12 @@ export interface HelperRequest {
  * @see HelperRequest
  */
 export interface HelperResponse {
-  /** Discriminator identifying this as a successful response. */
-  readonly type: "response";
-  /** ID matching the originating request. */
-  readonly id?: string;
-  /** Command-specific response payload. */
-  readonly payload?: Record<string, unknown>;
+	/** Discriminator identifying this as a successful response. */
+	readonly type: "response";
+	/** ID matching the originating request. */
+	readonly id?: string;
+	/** Command-specific response payload. */
+	readonly payload?: Record<string, unknown>;
 }
 
 /**
@@ -37,17 +37,17 @@ export interface HelperResponse {
  * @see WindowsHelperClient
  */
 export interface HelperError {
-  /** Discriminator identifying this as an error response. */
-  readonly type: "error";
-  /** ID matching the originating request. */
-  readonly id?: string;
-  /** Structured error details. */
-  readonly error: {
-    /** Stable error code (e.g. `"command_failed"`). */
-    readonly code: string;
-    /** Human-readable error message. */
-    readonly message: string;
-  };
+	/** Discriminator identifying this as an error response. */
+	readonly type: "error";
+	/** ID matching the originating request. */
+	readonly id?: string;
+	/** Structured error details. */
+	readonly error: {
+		/** Stable error code (e.g. `"command_failed"`). */
+		readonly code: string;
+		/** Human-readable error message. */
+		readonly message: string;
+	};
 }
 
 /**
@@ -59,12 +59,12 @@ export interface HelperError {
  * @see HelperNotificationEvent
  */
 export interface HelperEvent {
-  /** Discriminator identifying this as an unsolicited event. */
-  readonly type: "event";
-  /** Event name (e.g. `"ready"`, `"notification"`). */
-  readonly name: string;
-  /** Event-specific payload. */
-  readonly payload?: Record<string, unknown>;
+	/** Discriminator identifying this as an unsolicited event. */
+	readonly type: "event";
+	/** Event name (e.g. `"ready"`, `"notification"`). */
+	readonly name: string;
+	/** Event-specific payload. */
+	readonly payload?: Record<string, unknown>;
 }
 
 /**
@@ -82,12 +82,12 @@ export type HelperMessage = HelperResponse | HelperError | HelperEvent;
  * @see WindowsHelperClient.scan
  */
 export interface HelperScanDevice {
-  /** Bluetooth MAC address (platform-specific format). */
-  readonly address: string;
-  /** Advertised device name. */
-  readonly name: string;
-  /** Received signal strength in dBm, if available. */
-  readonly rssi?: number;
+	/** Bluetooth MAC address (platform-specific format). */
+	readonly address: string;
+	/** Advertised device name. */
+	readonly name: string;
+	/** Received signal strength in dBm, if available. */
+	readonly rssi?: number;
 }
 
 /**
@@ -101,17 +101,17 @@ export interface HelperScanDevice {
  * @see WindowsHelperClient.onNotification
  */
 export interface HelperNotificationEvent extends HelperEvent {
-  /** Fixed event name for characteristic notifications. */
-  readonly name: "notification";
-  /** Notification payload containing session, UUID, and base64 data. */
-  readonly payload?: {
-    /** Helper session ID that owns the subscription. */
-    readonly sessionId: string;
-    /** Characteristic UUID that produced the notification. */
-    readonly uuid: string;
-    /** Notification bytes encoded as base64. */
-    readonly dataBase64: string;
-  };
+	/** Fixed event name for characteristic notifications. */
+	readonly name: "notification";
+	/** Notification payload containing session, UUID, and base64 data. */
+	readonly payload?: {
+		/** Helper session ID that owns the subscription. */
+		readonly sessionId: string;
+		/** Characteristic UUID that produced the notification. */
+		readonly uuid: string;
+		/** Notification bytes encoded as base64. */
+		readonly dataBase64: string;
+	};
 }
 
 /**
@@ -120,10 +120,10 @@ export interface HelperNotificationEvent extends HelperEvent {
  * @see WindowsHelperClient.connect
  */
 export interface HelperConnectPayload {
-  /** Unique session ID assigned by the helper for this GATT connection. */
-  readonly sessionId: string;
-  /** Bluetooth MAC address that was connected. */
-  readonly address: string;
-  /** Advertised device name read from the standard name characteristic. */
-  readonly name: string;
+	/** Unique session ID assigned by the helper for this GATT connection. */
+	readonly sessionId: string;
+	/** Bluetooth MAC address that was connected. */
+	readonly address: string;
+	/** Advertised device name read from the standard name characteristic. */
+	readonly name: string;
 }

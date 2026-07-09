@@ -19,42 +19,42 @@ export type LogLevel = "debug" | "info" | "warn" | "error";
  * @see ConsoleLogger
  */
 export interface Logger {
-  /**
-   * Emits a debug-level message.
-   *
-   * @param message - Human-readable summary.
-   * @param context - Optional structured key/value pairs.
-   */
-  debug(message: string, context?: Record<string, unknown>): void;
-  /**
-   * Emits an info-level message.
-   *
-   * @param message - Human-readable summary.
-   * @param context - Optional structured key/value pairs.
-   */
-  info(message: string, context?: Record<string, unknown>): void;
-  /**
-   * Emits a warn-level message.
-   *
-   * @param message - Human-readable summary.
-   * @param context - Optional structured key/value pairs.
-   */
-  warn(message: string, context?: Record<string, unknown>): void;
-  /**
-   * Emits an error-level message.
-   *
-   * @param message - Human-readable summary.
-   * @param context - Optional structured key/value pairs.
-   */
-  error(message: string, context?: Record<string, unknown>): void;
+	/**
+	 * Emits a debug-level message.
+	 *
+	 * @param message - Human-readable summary.
+	 * @param context - Optional structured key/value pairs.
+	 */
+	debug(message: string, context?: Record<string, unknown>): void;
+	/**
+	 * Emits an info-level message.
+	 *
+	 * @param message - Human-readable summary.
+	 * @param context - Optional structured key/value pairs.
+	 */
+	info(message: string, context?: Record<string, unknown>): void;
+	/**
+	 * Emits a warn-level message.
+	 *
+	 * @param message - Human-readable summary.
+	 * @param context - Optional structured key/value pairs.
+	 */
+	warn(message: string, context?: Record<string, unknown>): void;
+	/**
+	 * Emits an error-level message.
+	 *
+	 * @param message - Human-readable summary.
+	 * @param context - Optional structured key/value pairs.
+	 */
+	error(message: string, context?: Record<string, unknown>): void;
 }
 
 /** Numeric priority for each log level (lower = more verbose). */
 const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
-  debug: 10,
-  info: 20,
-  warn: 30,
-  error: 40,
+	debug: 10,
+	info: 20,
+	warn: 30,
+	error: 40,
 };
 
 /**
@@ -77,66 +77,70 @@ const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
  * ```
  */
 export class ConsoleLogger implements Logger {
-  /**
-   * Creates a logger that suppresses messages below `minimumLevel`.
-   *
-   * @param minimumLevel - Lowest severity to emit (default `"info"`).
-   */
-  constructor(private readonly minimumLevel: LogLevel = DEFAULT_LOG_LEVEL) {}
+	/**
+	 * Creates a logger that suppresses messages below `minimumLevel`.
+	 *
+	 * @param minimumLevel - Lowest severity to emit (default `"info"`).
+	 */
+	constructor(private readonly minimumLevel: LogLevel = DEFAULT_LOG_LEVEL) {}
 
-  /** @inheritdoc */
-  debug(message: string, context?: Record<string, unknown>): void {
-    this.write("debug", message, context);
-  }
+	/** @inheritdoc */
+	debug(message: string, context?: Record<string, unknown>): void {
+		this.write("debug", message, context);
+	}
 
-  /** @inheritdoc */
-  info(message: string, context?: Record<string, unknown>): void {
-    this.write("info", message, context);
-  }
+	/** @inheritdoc */
+	info(message: string, context?: Record<string, unknown>): void {
+		this.write("info", message, context);
+	}
 
-  /** @inheritdoc */
-  warn(message: string, context?: Record<string, unknown>): void {
-    this.write("warn", message, context);
-  }
+	/** @inheritdoc */
+	warn(message: string, context?: Record<string, unknown>): void {
+		this.write("warn", message, context);
+	}
 
-  /** @inheritdoc */
-  error(message: string, context?: Record<string, unknown>): void {
-    this.write("error", message, context);
-  }
+	/** @inheritdoc */
+	error(message: string, context?: Record<string, unknown>): void {
+		this.write("error", message, context);
+	}
 
-  /**
-   * Writes a single JSON log line if the level passes the threshold.
-   *
-   * @param level - Severity of this message.
-   * @param message - Human-readable summary.
-   * @param context - Optional structured key/value pairs.
-   */
-  private write(level: LogLevel, message: string, context?: Record<string, unknown>): void {
-    if (LOG_LEVEL_PRIORITY[level] < LOG_LEVEL_PRIORITY[this.minimumLevel]) {
-      return;
-    }
+	/**
+	 * Writes a single JSON log line if the level passes the threshold.
+	 *
+	 * @param level - Severity of this message.
+	 * @param message - Human-readable summary.
+	 * @param context - Optional structured key/value pairs.
+	 */
+	private write(
+		level: LogLevel,
+		message: string,
+		context?: Record<string, unknown>,
+	): void {
+		if (LOG_LEVEL_PRIORITY[level] < LOG_LEVEL_PRIORITY[this.minimumLevel]) {
+			return;
+		}
 
-    const payload: Record<string, unknown> = {
-      timestamp: new Date().toISOString(),
-      level,
-      message,
-    };
-    if (context !== undefined && Object.keys(context).length > 0) {
-      payload.context = normalizeLogValue(context);
-    }
+		const payload: Record<string, unknown> = {
+			timestamp: new Date().toISOString(),
+			level,
+			message,
+		};
+		if (context !== undefined && Object.keys(context).length > 0) {
+			payload.context = normalizeLogValue(context);
+		}
 
-    const line = JSON.stringify(payload);
-    if (level === "warn") {
-      console.warn(line);
-      return;
-    }
+		const line = JSON.stringify(payload);
+		if (level === "warn") {
+			console.warn(line);
+			return;
+		}
 
-    if (level === "error") {
-      console.error(line);
-      return;
-    }
-    console.log(line);
-  }
+		if (level === "error") {
+			console.error(line);
+			return;
+		}
+		console.log(line);
+	}
 }
 
 /**
@@ -146,16 +150,19 @@ export class ConsoleLogger implements Logger {
  * @returns A JSON-safe representation where `bigint` becomes `string`.
  */
 function normalizeLogValue(value: unknown): unknown {
-  if (typeof value === "bigint") {
-    return value.toString();
-  }
-  if (Array.isArray(value)) {
-    return value.map((entry) => normalizeLogValue(entry));
-  }
-  if (value !== null && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([key, entry]) => [key, normalizeLogValue(entry)]),
-    );
-  }
-  return value;
+	if (typeof value === "bigint") {
+		return value.toString();
+	}
+	if (Array.isArray(value)) {
+		return value.map((entry) => normalizeLogValue(entry));
+	}
+	if (value !== null && typeof value === "object") {
+		return Object.fromEntries(
+			Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
+				key,
+				normalizeLogValue(entry),
+			]),
+		);
+	}
+	return value;
 }

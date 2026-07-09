@@ -1,6 +1,6 @@
 import { BadConnectionError } from "@bluetooth/errors.js";
-import { MultiDeviceManager } from "@bluetooth/manager.js";
-import { type Logger } from "@core/logger.js";
+import type { MultiDeviceManager } from "@bluetooth/manager.js";
+import type { Logger } from "@core/logger.js";
 import { formatError, STARTUP_RETRY_DELAY_MS } from "./polling-state.js";
 
 /**
@@ -9,30 +9,32 @@ import { formatError, STARTUP_RETRY_DELAY_MS } from "./polling-state.js";
  * @returns `true` when connection succeeds, `false` when stopped.
  */
 export async function connectAllWithRecovery(
-  connectAll: () => Promise<void>,
-  isStopRequested: () => boolean,
-  runOnce: boolean,
-  logger: Logger,
-  sleep: (ms: number) => Promise<void>,
+	connectAll: () => Promise<void>,
+	isStopRequested: () => boolean,
+	runOnce: boolean,
+	logger: Logger,
+	sleep: (ms: number) => Promise<void>,
 ): Promise<boolean> {
-  while (!isStopRequested()) {
-    try {
-      await connectAll();
-      return true;
-    } catch (error) {
-      if (runOnce || !(error instanceof BadConnectionError)) {
-        throw error;
-      }
+	while (!isStopRequested()) {
+		try {
+			await connectAll();
+			return true;
+		} catch (error) {
+			if (runOnce || !(error instanceof BadConnectionError)) {
+				throw error;
+			}
 
-      logger.warn("Bluetooth startup failed; retrying", {
-        error: formatError(error instanceof Error ? error : new Error(String(error))),
-        retryInMs: STARTUP_RETRY_DELAY_MS,
-      });
-      await sleep(STARTUP_RETRY_DELAY_MS);
-    }
-  }
+			logger.warn("Bluetooth startup failed; retrying", {
+				error: formatError(
+					error instanceof Error ? error : new Error(String(error)),
+				),
+				retryInMs: STARTUP_RETRY_DELAY_MS,
+			});
+			await sleep(STARTUP_RETRY_DELAY_MS);
+		}
+	}
 
-  return false;
+	return false;
 }
 
 /**
@@ -41,28 +43,30 @@ export async function connectAllWithRecovery(
  * @returns `true` when reconnection succeeds, `false` when stopped.
  */
 export async function recoverDeviceConnection(
-  address: string,
-  manager: MultiDeviceManager,
-  isStopRequested: () => boolean,
-  logger: Logger,
-  sleep: (ms: number) => Promise<void>,
+	address: string,
+	manager: MultiDeviceManager,
+	isStopRequested: () => boolean,
+	logger: Logger,
+	sleep: (ms: number) => Promise<void>,
 ): Promise<boolean> {
-  logger.warn("Bluetooth connection lost; reconnecting", { address });
+	logger.warn("Bluetooth connection lost; reconnecting", { address });
 
-  while (!isStopRequested()) {
-    try {
-      await manager.reconnect(address);
-      logger.info("Bluetooth connection recovered", { address });
-      return true;
-    } catch (error) {
-      logger.warn("Bluetooth reconnect failed; retrying", {
-        address,
-        error: formatError(error instanceof Error ? error : new Error(String(error))),
-        retryInMs: STARTUP_RETRY_DELAY_MS,
-      });
-      await sleep(STARTUP_RETRY_DELAY_MS);
-    }
-  }
+	while (!isStopRequested()) {
+		try {
+			await manager.reconnect(address);
+			logger.info("Bluetooth connection recovered", { address });
+			return true;
+		} catch (error) {
+			logger.warn("Bluetooth reconnect failed; retrying", {
+				address,
+				error: formatError(
+					error instanceof Error ? error : new Error(String(error)),
+				),
+				retryInMs: STARTUP_RETRY_DELAY_MS,
+			});
+			await sleep(STARTUP_RETRY_DELAY_MS);
+		}
+	}
 
-  return false;
+	return false;
 }

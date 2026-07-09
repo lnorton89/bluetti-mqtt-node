@@ -7,7 +7,8 @@ export const HELPER_ERROR_COMMAND_FAILED = "command_failed";
 export const DISPOSED_OBJECT_ERROR_TEXT = "cannot access a disposed object";
 export const UNREACHABLE_ERROR_TEXT = "unreachable";
 export const GATT_UNREACHABLE_TEXT = "enumerate GATT services: unreachable";
-export const GATT_FAILED_UNREACHABLE_TEXT = "failed to enumerate GATT services: unreachable";
+export const GATT_FAILED_UNREACHABLE_TEXT =
+	"failed to enumerate GATT services: unreachable";
 
 export const HELPER_EVENT_READY = "ready";
 export const HELPER_EVENT_NOTIFICATION = "notification";

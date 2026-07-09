@@ -7,20 +7,20 @@ const MAX_TIMER_MS = 2_147_483_647;
 
 /** Shape of the JSON config file after validation. */
 export interface CliConfigFile {
-  /** MQTT broker URL. */
-  broker?: string;
-  /** MQTT username. */
-  username?: string;
-  /** MQTT password. */
-  password?: string;
-  /** Poll interval in seconds. */
-  interval?: number;
-  /** Whether to run one cycle and exit. */
-  once?: boolean;
-  /** Bluetooth MAC addresses to poll. */
-  addresses?: readonly string[];
-  /** Minimum log level. */
-  logLevel?: LogLevel;
+	/** MQTT broker URL. */
+	broker?: string;
+	/** MQTT username. */
+	username?: string;
+	/** MQTT password. */
+	password?: string;
+	/** Poll interval in seconds. */
+	interval?: number;
+	/** Whether to run one cycle and exit. */
+	once?: boolean;
+	/** Bluetooth MAC addresses to poll. */
+	addresses?: readonly string[];
+	/** Minimum log level. */
+	logLevel?: LogLevel;
 }
 
 /**
@@ -32,13 +32,17 @@ export interface CliConfigFile {
  * @returns The flag value string.
  * @throws {UsageError} When the next argument is missing or starts with `--`.
  */
-export function requireValue(argv: readonly string[], index: number, helpText: string): string {
-  const value = argv[index + 1];
-  if (value === undefined || value.startsWith("--")) {
-    throw new UsageError(helpText);
-  }
+export function requireValue(
+	argv: readonly string[],
+	index: number,
+	helpText: string,
+): string {
+	const value = argv[index + 1];
+	if (value === undefined || value.startsWith("--")) {
+		throw new UsageError(helpText);
+	}
 
-  return value;
+	return value;
 }
 
 /**
@@ -49,13 +53,16 @@ export function requireValue(argv: readonly string[], index: number, helpText: s
  * @returns Interval in milliseconds.
  * @throws {UsageError} When the value is not a valid interval.
  */
-export function parseIntervalSeconds(rawValue: string, helpText: string): number {
-  const seconds = Number(rawValue);
-  if (!isValidIntervalSeconds(seconds)) {
-    throw new UsageError(helpText);
-  }
+export function parseIntervalSeconds(
+	rawValue: string,
+	helpText: string,
+): number {
+	const seconds = Number(rawValue);
+	if (!isValidIntervalSeconds(seconds)) {
+		throw new UsageError(helpText);
+	}
 
-  return seconds * 1000;
+	return seconds * 1000;
 }
 
 /**
@@ -66,11 +73,13 @@ export function parseIntervalSeconds(rawValue: string, helpText: string): number
  *   `MAX_TIMER_MS`.
  */
 function isValidIntervalSeconds(seconds: number): boolean {
-  const milliseconds = seconds * 1000;
-  return Number.isFinite(seconds)
-    && seconds >= 0
-    && Number.isSafeInteger(milliseconds)
-    && milliseconds <= MAX_TIMER_MS;
+	const milliseconds = seconds * 1000;
+	return (
+		Number.isFinite(seconds) &&
+		seconds >= 0 &&
+		Number.isSafeInteger(milliseconds) &&
+		milliseconds <= MAX_TIMER_MS
+	);
 }
 
 /**
@@ -82,11 +91,16 @@ function isValidIntervalSeconds(seconds: number): boolean {
  * @throws {UsageError} When the value is not a recognized level.
  */
 export function parseLogLevel(rawValue: string, helpText: string): LogLevel {
-  if (rawValue === "debug" || rawValue === "info" || rawValue === "warn" || rawValue === "error") {
-    return rawValue;
-  }
+	if (
+		rawValue === "debug" ||
+		rawValue === "info" ||
+		rawValue === "warn" ||
+		rawValue === "error"
+	) {
+		return rawValue;
+	}
 
-  throw new UsageError(helpText);
+	throw new UsageError(helpText);
 }
 
 /**
@@ -98,67 +112,73 @@ export function parseLogLevel(rawValue: string, helpText: string): LogLevel {
  *   contains invalid field values.
  */
 export async function readConfigFile(path: string): Promise<CliConfigFile> {
-  let raw: string;
-  try {
-    raw = await readFile(path, "utf8");
-  } catch {
-    throw new UsageError(`Failed to read config file '${path}'.`);
-  }
+	let raw: string;
+	try {
+		raw = await readFile(path, "utf8");
+	} catch {
+		throw new UsageError(`Failed to read config file '${path}'.`);
+	}
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new UsageError(`Config file '${path}' must be valid JSON.`);
-  }
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(raw);
+	} catch {
+		throw new UsageError(`Config file '${path}' must be valid JSON.`);
+	}
 
-  if (typeof parsed !== "object" || parsed === null) {
-    throw new UsageError(`Config file '${path}' must contain a JSON object.`);
-  }
+	if (typeof parsed !== "object" || parsed === null) {
+		throw new UsageError(`Config file '${path}' must contain a JSON object.`);
+	}
 
-  const candidate = parsed as Record<string, unknown>;
-  const config: CliConfigFile = {};
+	const candidate = parsed as Record<string, unknown>;
+	const config: CliConfigFile = {};
 
-  if (candidate.broker !== undefined) {
-    config.broker = requireConfigString(candidate.broker, path, "broker");
-  }
-  if (candidate.username !== undefined) {
-    config.username = requireConfigString(candidate.username, path, "username");
-  }
-  if (candidate.password !== undefined) {
-    config.password = requireConfigString(candidate.password, path, "password");
-  }
-  if (candidate.interval !== undefined) {
-    if (typeof candidate.interval !== "number" || !isValidIntervalSeconds(candidate.interval)) {
-      throw invalidConfigValue(path, "interval");
-    }
-    config.interval = candidate.interval;
-  }
-  if (candidate.once !== undefined) {
-    if (typeof candidate.once !== "boolean") {
-      throw invalidConfigValue(path, "once");
-    }
-    config.once = candidate.once;
-  }
-  if (candidate.addresses !== undefined) {
-    if (!Array.isArray(candidate.addresses) || !candidate.addresses.every((value) => typeof value === "string")) {
-      throw invalidConfigValue(path, "addresses");
-    }
-    config.addresses = candidate.addresses;
-  }
-  if (candidate.logLevel !== undefined) {
-    if (
-      candidate.logLevel !== "debug"
-      && candidate.logLevel !== "info"
-      && candidate.logLevel !== "warn"
-      && candidate.logLevel !== "error"
-    ) {
-      throw invalidConfigValue(path, "logLevel");
-    }
-    config.logLevel = candidate.logLevel;
-  }
+	if (candidate.broker !== undefined) {
+		config.broker = requireConfigString(candidate.broker, path, "broker");
+	}
+	if (candidate.username !== undefined) {
+		config.username = requireConfigString(candidate.username, path, "username");
+	}
+	if (candidate.password !== undefined) {
+		config.password = requireConfigString(candidate.password, path, "password");
+	}
+	if (candidate.interval !== undefined) {
+		if (
+			typeof candidate.interval !== "number" ||
+			!isValidIntervalSeconds(candidate.interval)
+		) {
+			throw invalidConfigValue(path, "interval");
+		}
+		config.interval = candidate.interval;
+	}
+	if (candidate.once !== undefined) {
+		if (typeof candidate.once !== "boolean") {
+			throw invalidConfigValue(path, "once");
+		}
+		config.once = candidate.once;
+	}
+	if (candidate.addresses !== undefined) {
+		if (
+			!Array.isArray(candidate.addresses) ||
+			!candidate.addresses.every((value) => typeof value === "string")
+		) {
+			throw invalidConfigValue(path, "addresses");
+		}
+		config.addresses = candidate.addresses;
+	}
+	if (candidate.logLevel !== undefined) {
+		if (
+			candidate.logLevel !== "debug" &&
+			candidate.logLevel !== "info" &&
+			candidate.logLevel !== "warn" &&
+			candidate.logLevel !== "error"
+		) {
+			throw invalidConfigValue(path, "logLevel");
+		}
+		config.logLevel = candidate.logLevel;
+	}
 
-  return config;
+	return config;
 }
 
 /**
@@ -170,11 +190,15 @@ export async function readConfigFile(path: string): Promise<CliConfigFile> {
  * @returns The validated string.
  * @throws {UsageError} When the value is not a string or is empty/whitespace.
  */
-function requireConfigString(value: unknown, path: string, field: string): string {
-  if (typeof value !== "string" || value.trim() === "") {
-    throw invalidConfigValue(path, field);
-  }
-  return value;
+function requireConfigString(
+	value: unknown,
+	path: string,
+	field: string,
+): string {
+	if (typeof value !== "string" || value.trim() === "") {
+		throw invalidConfigValue(path, field);
+	}
+	return value;
 }
 
 /**
@@ -185,5 +209,7 @@ function requireConfigString(value: unknown, path: string, field: string): strin
  * @returns A `UsageError` with a descriptive message.
  */
 function invalidConfigValue(path: string, field: string): UsageError {
-  return new UsageError(`Config file '${path}' has an invalid '${field}' value.`);
+	return new UsageError(
+		`Config file '${path}' has an invalid '${field}' value.`,
+	);
 }

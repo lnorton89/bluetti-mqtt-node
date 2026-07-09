@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 
-import { WindowsHelperClient, createWindowsHelperRuntime } from "@bluetooth/helper-client.js";
 import {
-  hasHelpFlag,
-  HelpError,
-  normalizeValue,
-  optionalSingleAddressArg,
-  runCli,
-  runPollingCommands,
-  withConnectedDevice,
+	createWindowsHelperRuntime,
+	WindowsHelperClient,
+} from "@bluetooth/helper-client.js";
+import {
+	HelpError,
+	hasHelpFlag,
+	normalizeValue,
+	optionalSingleAddressArg,
+	runCli,
+	runPollingCommands,
+	withConnectedDevice,
 } from "./shared.js";
 
 /** CLI usage text printed by `--help` or on argument errors. */
@@ -27,43 +30,53 @@ With an address, run the standard polling set and print merged parsed state as J
  * prints per-command and merged parsed state as JSON.
  */
 async function main(): Promise<void> {
-  const argv = process.argv.slice(2);
-  if (hasHelpFlag(argv)) {
-    throw new HelpError(HELP_TEXT);
-  }
+	const argv = process.argv.slice(2);
+	if (hasHelpFlag(argv)) {
+		throw new HelpError(HELP_TEXT);
+	}
 
-  const address = optionalSingleAddressArg(argv, HELP_TEXT);
-  if (!address) {
-    const client = new WindowsHelperClient();
-    try {
-      const runtime = createWindowsHelperRuntime(client);
-      const devices = await runtime.discovery?.discover();
-      console.log(JSON.stringify(devices ?? [], null, 2));
-      return;
-    } finally {
-      client.dispose();
-    }
-  }
+	const address = optionalSingleAddressArg(argv, HELP_TEXT);
+	if (!address) {
+		const client = new WindowsHelperClient();
+		try {
+			const runtime = createWindowsHelperRuntime(client);
+			const devices = await runtime.discovery?.discover();
+			console.log(JSON.stringify(devices ?? [], null, 2));
+			return;
+		} finally {
+			client.dispose();
+		}
+	}
 
-  const payload = await withConnectedDevice(address, async ({ device, session }) => {
-    const results = await runPollingCommands(session, device, device.pollingCommands);
-    const merged = Object.assign({}, ...results.map((result) => result.parsed));
+	const payload = await withConnectedDevice(
+		address,
+		async ({ device, session }) => {
+			const results = await runPollingCommands(
+				session,
+				device,
+				device.pollingCommands,
+			);
+			const merged = Object.assign(
+				{},
+				...results.map((result) => result.parsed),
+			);
 
-    return {
-      address,
-      deviceName: session.name,
-      deviceType: device.type,
-      commands: results.map((result) => ({
-        startingAddress: result.command.startingAddress,
-        quantity: result.command.quantity,
-        responseBase64: Buffer.from(result.response).toString("base64"),
-        parsed: normalizeValue(result.parsed),
-      })),
-      merged: normalizeValue(merged),
-    };
-  });
+			return {
+				address,
+				deviceName: session.name,
+				deviceType: device.type,
+				commands: results.map((result) => ({
+					startingAddress: result.command.startingAddress,
+					quantity: result.command.quantity,
+					responseBase64: Buffer.from(result.response).toString("base64"),
+					parsed: normalizeValue(result.parsed),
+				})),
+				merged: normalizeValue(merged),
+			};
+		},
+	);
 
-  console.log(JSON.stringify(payload, null, 2));
+	console.log(JSON.stringify(payload, null, 2));
 }
 
 runCli(main);

@@ -9,12 +9,12 @@
  * @see ParsedFieldMap - keyed collection of decoded values
  */
 export type ParsedValue =
-  | boolean
-  | number
-  | string
-  | bigint
-  | readonly number[]
-  | DeviceEnumValue;
+	| boolean
+	| number
+	| string
+	| bigint
+	| readonly number[]
+	| DeviceEnumValue;
 
 /**
  * A decoded enum value that retains both its display name and raw wire value.
@@ -24,10 +24,10 @@ export type ParsedValue =
  * and log unexpected states.
  */
 export interface DeviceEnumValue {
-  /** Human-readable enum label, or `UNKNOWN_<value>` for unmapped codes. */
-  readonly name: string;
-  /** Raw 16-bit register value as read from the device. */
-  readonly value: number;
+	/** Human-readable enum label, or `UNKNOWN_<value>` for unmapped codes. */
+	readonly name: string;
+	/** Raw 16-bit register value as read from the device. */
+	readonly value: number;
 }
 
 /**
@@ -51,10 +51,10 @@ export type ParsedFieldMap = Record<string, ParsedValue>;
  * @see isAddressWritable
  */
 export interface WritableRange {
-  /** First writable register address (inclusive). */
-  readonly start: number;
-  /** Address one past the last writable register (exclusive). */
-  readonly endExclusive: number;
+	/** First writable register address (inclusive). */
+	readonly start: number;
+	/** Address one past the last writable register (exclusive). */
+	readonly endExclusive: number;
 }
 
 /**
@@ -71,6 +71,11 @@ export interface WritableRange {
  * isAddressWritable(99, ranges);   // false
  * ```
  */
-export function isAddressWritable(address: number, ranges: readonly WritableRange[]): boolean {
-  return ranges.some((range) => address >= range.start && address < range.endExclusive);
+export function isAddressWritable(
+	address: number,
+	ranges: readonly WritableRange[],
+): boolean {
+	return ranges.some(
+		(range) => address >= range.start && address < range.endExclusive,
+	);
 }

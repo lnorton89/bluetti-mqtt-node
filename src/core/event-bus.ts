@@ -6,10 +6,10 @@
  * @see EventBus.publishParserMessage
  */
 export interface ParserMessage<Device> {
-  /** Device that produced this telemetry. */
-  readonly device: Device;
-  /** Decoded field map from one or more register reads. */
-  readonly parsed: Record<string, unknown>;
+	/** Device that produced this telemetry. */
+	readonly device: Device;
+	/** Decoded field map from one or more register reads. */
+	readonly parsed: Record<string, unknown>;
 }
 
 /**
@@ -21,10 +21,10 @@ export interface ParserMessage<Device> {
  * @see EventBus.publishCommandMessage
  */
 export interface CommandMessage<Device, Command> {
-  /** Target device for the command. */
-  readonly device: Device;
-  /** MODBUS command to execute on the target device. */
-  readonly command: Command;
+	/** Target device for the command. */
+	readonly device: Device;
+	/** MODBUS command to execute on the target device. */
+	readonly command: Command;
 }
 
 /** Listener callback that may be sync or async. */
@@ -61,54 +61,70 @@ type AsyncListener<T> = (message: T) => Promise<void> | void;
  * @see DeviceHandler
  */
 export class EventBus<ParserDevice, CommandDevice, CommandType> {
-  /** Registered parser (telemetry) listeners. */
-  private readonly parserListeners = new Set<AsyncListener<ParserMessage<ParserDevice>>>();
-  /** Registered command listeners. */
-  private readonly commandListeners = new Set<AsyncListener<CommandMessage<CommandDevice, CommandType>>>();
+	/** Registered parser (telemetry) listeners. */
+	private readonly parserListeners = new Set<
+		AsyncListener<ParserMessage<ParserDevice>>
+	>();
+	/** Registered command listeners. */
+	private readonly commandListeners = new Set<
+		AsyncListener<CommandMessage<CommandDevice, CommandType>>
+	>();
 
-  /**
-   * Registers a telemetry listener and returns its disposer.
-   *
-   * @param listener - Async or sync callback invoked for each parser message.
-   * @returns A function that removes the listener when called.
-   */
-  addParserListener(listener: AsyncListener<ParserMessage<ParserDevice>>): () => void {
-    this.parserListeners.add(listener);
-    return () => {
-      this.parserListeners.delete(listener);
-    };
-  }
+	/**
+	 * Registers a telemetry listener and returns its disposer.
+	 *
+	 * @param listener - Async or sync callback invoked for each parser message.
+	 * @returns A function that removes the listener when called.
+	 */
+	addParserListener(
+		listener: AsyncListener<ParserMessage<ParserDevice>>,
+	): () => void {
+		this.parserListeners.add(listener);
+		return () => {
+			this.parserListeners.delete(listener);
+		};
+	}
 
-  /**
-   * Registers a command listener and returns its disposer.
-   *
-   * @param listener - Async or sync callback invoked for each command message.
-   * @returns A function that removes the listener when called.
-   */
-  addCommandListener(listener: AsyncListener<CommandMessage<CommandDevice, CommandType>>): () => void {
-    this.commandListeners.add(listener);
-    return () => {
-      this.commandListeners.delete(listener);
-    };
-  }
+	/**
+	 * Registers a command listener and returns its disposer.
+	 *
+	 * @param listener - Async or sync callback invoked for each command message.
+	 * @returns A function that removes the listener when called.
+	 */
+	addCommandListener(
+		listener: AsyncListener<CommandMessage<CommandDevice, CommandType>>,
+	): () => void {
+		this.commandListeners.add(listener);
+		return () => {
+			this.commandListeners.delete(listener);
+		};
+	}
 
-  /**
-   * Publishes a parser message and waits for every current listener to complete.
-   *
-   * @param message - Telemetry to deliver to all parser listeners.
-   * @returns A promise that resolves when all listeners have settled.
-   */
-  async publishParserMessage(message: ParserMessage<ParserDevice>): Promise<void> {
-    await Promise.all([...this.parserListeners].map(async (listener) => listener(message)));
-  }
+	/**
+	 * Publishes a parser message and waits for every current listener to complete.
+	 *
+	 * @param message - Telemetry to deliver to all parser listeners.
+	 * @returns A promise that resolves when all listeners have settled.
+	 */
+	async publishParserMessage(
+		message: ParserMessage<ParserDevice>,
+	): Promise<void> {
+		await Promise.all(
+			[...this.parserListeners].map(async (listener) => listener(message)),
+		);
+	}
 
-  /**
-   * Publishes a command message and waits for every current listener to complete.
-   *
-   * @param message - Command to deliver to all command listeners.
-   * @returns A promise that resolves when all listeners have settled.
-   */
-  async publishCommandMessage(message: CommandMessage<CommandDevice, CommandType>): Promise<void> {
-    await Promise.all([...this.commandListeners].map(async (listener) => listener(message)));
-  }
+	/**
+	 * Publishes a command message and waits for every current listener to complete.
+	 *
+	 * @param message - Command to deliver to all command listeners.
+	 * @returns A promise that resolves when all listeners have settled.
+	 */
+	async publishCommandMessage(
+		message: CommandMessage<CommandDevice, CommandType>,
+	): Promise<void> {
+		await Promise.all(
+			[...this.commandListeners].map(async (listener) => listener(message)),
+		);
+	}
 }

@@ -26,20 +26,20 @@ const MODBUS_POLYNOMIAL = CRC_POLYNOMIAL;
  * @see hasValidModbusCrc
  */
 export function modbusCrc(data: Uint8Array): number {
-  let crc = CRC_INITIAL_VALUE;
+	let crc = CRC_INITIAL_VALUE;
 
-  for (const byte of data) {
-    crc ^= byte;
-    for (let bit = 0; bit < 8; bit += 1) {
-      const lsb = crc & 0x0001;
-      crc >>= 1;
-      if (lsb !== 0) {
-        crc ^= MODBUS_POLYNOMIAL;
-      }
-    }
-  }
+	for (const byte of data) {
+		crc ^= byte;
+		for (let bit = 0; bit < 8; bit += 1) {
+			const lsb = crc & 0x0001;
+			crc >>= 1;
+			if (lsb !== 0) {
+				crc ^= MODBUS_POLYNOMIAL;
+			}
+		}
+	}
 
-  return crc & 0xffff;
+	return crc & 0xffff;
 }
 
 /**
@@ -58,12 +58,12 @@ export function modbusCrc(data: Uint8Array): number {
  * @see modbusCrc
  */
 export function appendModbusCrc(data: Uint8Array): Uint8Array {
-  const crc = modbusCrc(data);
-  const result = new Uint8Array(data.length + 2);
-  result.set(data, 0);
-  result[result.length - 2] = crc & 0xff;
-  result[result.length - 1] = (crc >> 8) & 0xff;
-  return result;
+	const crc = modbusCrc(data);
+	const result = new Uint8Array(data.length + 2);
+	result.set(data, 0);
+	result[result.length - 2] = crc & 0xff;
+	result[result.length - 1] = (crc >> 8) & 0xff;
+	return result;
 }
 
 /**
@@ -83,12 +83,12 @@ export function appendModbusCrc(data: Uint8Array): Uint8Array {
  * @see modbusCrc
  */
 export function hasValidModbusCrc(frame: Uint8Array): boolean {
-  if (frame.length < 3) {
-    return false;
-  }
+	if (frame.length < 3) {
+		return false;
+	}
 
-  const expected = modbusCrc(frame.subarray(0, -2));
-  const low = frame[frame.length - 2];
-  const high = frame[frame.length - 1];
-  return low === (expected & 0xff) && high === ((expected >> 8) & 0xff);
+	const expected = modbusCrc(frame.subarray(0, -2));
+	const low = frame[frame.length - 2];
+	const high = frame[frame.length - 1];
+	return low === (expected & 0xff) && high === ((expected >> 8) & 0xff);
 }

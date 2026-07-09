@@ -10,76 +10,85 @@ await run();
  * along with window-skip, range-skip, word-boundary, and payload validation.
  */
 async function run() {
-  testParsesStringField();
-  testParsesSwapStringField();
-  testParsesSerialNumberField();
-  testParsesVersionField();
-  testSkipsFieldsOutsideWindow();
-  testSkipsOutOfRangeValues();
-  testParsesUnsignedHighVersionWord();
-  testRejectsOddRegisterPayloads();
-  console.log("struct smoke test passed");
+	testParsesStringField();
+	testParsesSwapStringField();
+	testParsesSerialNumberField();
+	testParsesVersionField();
+	testSkipsFieldsOutsideWindow();
+	testSkipsOutOfRangeValues();
+	testParsesUnsignedHighVersionWord();
+	testRejectsOddRegisterPayloads();
+	console.log("struct smoke test passed");
 }
 
 /** Decodes a 3-register ASCII string field. */
 function testParsesStringField() {
-  const struct = new DeviceStruct().addStringField("device_type", 10, 3);
-  const parsed = struct.parse(10, asciiWords("AC500\0"));
-  assert.equal(parsed.device_type, "AC500");
+	const struct = new DeviceStruct().addStringField("device_type", 10, 3);
+	const parsed = struct.parse(10, asciiWords("AC500\0"));
+	assert.equal(parsed.device_type, "AC500");
 }
 
 /** Decodes a swap-byte string field from raw byte pairs. */
 function testParsesSwapStringField() {
-  const struct = new DeviceStruct().addSwapStringField("device_type", 10, 3);
-  const parsed = struct.parse(10, new Uint8Array([
-    0x43, 0x41,
-    0x30, 0x35,
-    0x00, 0x30,
-  ]));
-  assert.equal(parsed.device_type, "AC500");
+	const struct = new DeviceStruct().addSwapStringField("device_type", 10, 3);
+	const parsed = struct.parse(
+		10,
+		new Uint8Array([0x43, 0x41, 0x30, 0x35, 0x00, 0x30]),
+	);
+	assert.equal(parsed.device_type, "AC500");
 }
 
 /** Decodes a 4-register big-endian serial number into a BigInt. */
 function testParsesSerialNumberField() {
-  const struct = new DeviceStruct().addSerialNumberField("serial_number", 10);
-  const parsed = struct.parse(10, registers([1, 2, 3, 4]));
-  assert.equal(parsed.serial_number, 1n + (2n << 16n) + (3n << 32n) + (4n << 48n));
+	const struct = new DeviceStruct().addSerialNumberField("serial_number", 10);
+	const parsed = struct.parse(10, registers([1, 2, 3, 4]));
+	assert.equal(
+		parsed.serial_number,
+		1n + (2n << 16n) + (3n << 32n) + (4n << 48n),
+	);
 }
 
 /** Decodes a version field from major/minor register values (e.g. 234.1 -> 657.7). */
 function testParsesVersionField() {
-  const struct = new DeviceStruct().addVersionField("arm_version", 10);
-  const parsed = struct.parse(10, registers([234, 1]));
-  assert.equal(parsed.arm_version, 657.7);
+	const struct = new DeviceStruct().addVersionField("arm_version", 10);
+	const parsed = struct.parse(10, registers([234, 1]));
+	assert.equal(parsed.arm_version, 657.7);
 }
 
 /** Fields whose register address falls outside the read window are omitted from results. */
 function testSkipsFieldsOutsideWindow() {
-  const struct = new DeviceStruct()
-    .addUintField("inside", 10)
-    .addUintField("outside", 11);
-  const parsed = struct.parse(10, registers([7]));
-  assert.deepEqual(parsed, { inside: 7 });
+	const struct = new DeviceStruct()
+		.addUintField("inside", 10)
+		.addUintField("outside", 11);
+	const parsed = struct.parse(10, registers([7]));
+	assert.deepEqual(parsed, { inside: 7 });
 }
 
 /** Values outside the caller-specified plausibility range are silently dropped. */
 function testSkipsOutOfRangeValues() {
-  const struct = new DeviceStruct().addUintField("battery_percent", 10, [0, 100]);
-  const parsed = struct.parse(10, registers([101]));
-  assert.deepEqual(parsed, {});
+	const struct = new DeviceStruct().addUintField(
+		"battery_percent",
+		10,
+		[0, 100],
+	);
+	const parsed = struct.parse(10, registers([101]));
+	assert.deepEqual(parsed, {});
 }
 
 /** High 16-bit version word encodes fractions in its upper bits. */
 function testParsesUnsignedHighVersionWord() {
-  const struct = new DeviceStruct().addVersionField("arm_version", 10);
-  const parsed = struct.parse(10, registers([0, 0xffff]));
-  assert.equal(parsed.arm_version, (0xffff * 0x1_0000) / 100);
+	const struct = new DeviceStruct().addVersionField("arm_version", 10);
+	const parsed = struct.parse(10, registers([0, 0xffff]));
+	assert.equal(parsed.arm_version, (0xffff * 0x1_0000) / 100);
 }
 
 /** Register payloads with odd byte length trigger a validation error. */
 function testRejectsOddRegisterPayloads() {
-  const struct = new DeviceStruct().addUintField("value", 10);
-  assert.throws(() => struct.parse(10, new Uint8Array([0x00])), /length must be even/);
+	const struct = new DeviceStruct().addUintField("value", 10);
+	assert.throws(
+		() => struct.parse(10, new Uint8Array([0x00])),
+		/length must be even/,
+	);
 }
 
 /**
@@ -89,14 +98,14 @@ function testRejectsOddRegisterPayloads() {
  * @returns Big-endian `Uint8Array` of length `words.length * 2`.
  */
 function registers(words) {
-  const bytes = [];
-  for (const word of words) {
-    bytes.push((word >> 8) & 0xff, word & 0xff);
-  }
-  return new Uint8Array(bytes);
+	const bytes = [];
+	for (const word of words) {
+		bytes.push((word >> 8) & 0xff, word & 0xff);
+	}
+	return new Uint8Array(bytes);
 }
 
 /** Encodes a string as ASCII bytes for use as register payload data. */
 function asciiWords(value) {
-  return new Uint8Array(Buffer.from(value, "ascii"));
+	return new Uint8Array(Buffer.from(value, "ascii"));
 }

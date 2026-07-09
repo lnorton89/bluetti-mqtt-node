@@ -1,17 +1,20 @@
 import { DeviceSession } from "@bluetooth/device-session.js";
-import { WindowsHelperClient, createWindowsHelperRuntime } from "@bluetooth/helper-client.js";
+import {
+	createWindowsHelperRuntime,
+	WindowsHelperClient,
+} from "@bluetooth/helper-client.js";
 import type { BluetoothTransport } from "@bluetooth/transport.js";
 import type { ReadHoldingRegisters } from "@core/commands.js";
 import type { BluettiDevice } from "@devices/device.js";
 import { createDeviceFromAdvertisement } from "@devices/registry.js";
 import {
-  HELP_LONG_FLAG,
-  HELP_SHORT_FLAG,
-  MAC_COLON_PATTERN,
-  MAC_COMPACT_PATTERN,
-  MAC_HYPHEN_PATTERN,
-  SIGNAL_INTERRUPT,
-  SIGNAL_TERMINATE,
+	HELP_LONG_FLAG,
+	HELP_SHORT_FLAG,
+	MAC_COLON_PATTERN,
+	MAC_COMPACT_PATTERN,
+	MAC_HYPHEN_PATTERN,
+	SIGNAL_INTERRUPT,
+	SIGNAL_TERMINATE,
 } from "./constants.js";
 
 /**
@@ -48,43 +51,43 @@ export class HelpError extends Error {}
  * @see ConnectedDeviceContext
  */
 export async function withConnectedDevice<T>(
-  address: string,
-  work: (context: ConnectedDeviceContext) => Promise<T>,
+	address: string,
+	work: (context: ConnectedDeviceContext) => Promise<T>,
 ): Promise<T> {
-  const client = new WindowsHelperClient();
-  let transport: BluetoothTransport | null = null;
-  let operationFailed = false;
-  try {
-    const runtime = createWindowsHelperRuntime(client);
-    transport = runtime.transportFactory.create();
-    const session = new DeviceSession(address, transport);
-    await session.connectAndInitialize();
+	const client = new WindowsHelperClient();
+	let transport: BluetoothTransport | null = null;
+	let operationFailed = false;
+	try {
+		const runtime = createWindowsHelperRuntime(client);
+		transport = runtime.transportFactory.create();
+		const session = new DeviceSession(address, transport);
+		await session.connectAndInitialize();
 
-    if (session.name === null) {
-      throw new Error("Connected device did not report a name");
-    }
+		if (session.name === null) {
+			throw new Error("Connected device did not report a name");
+		}
 
-    const device = createDeviceFromAdvertisement(address, session.name);
-    return await work({ address, session, device });
-  } catch (error) {
-    operationFailed = true;
-    throw error;
-  } finally {
-    let disconnectError: unknown;
-    if (transport !== null) {
-      try {
-        await transport.disconnect();
-      } catch (error) {
-        if (!operationFailed) {
-          disconnectError = error;
-        }
-      }
-    }
-    client.dispose();
-    if (disconnectError !== undefined) {
-      throw disconnectError;
-    }
-  }
+		const device = createDeviceFromAdvertisement(address, session.name);
+		return await work({ address, session, device });
+	} catch (error) {
+		operationFailed = true;
+		throw error;
+	} finally {
+		let disconnectError: unknown;
+		if (transport !== null) {
+			try {
+				await transport.disconnect();
+			} catch (error) {
+				if (!operationFailed) {
+					disconnectError = error;
+				}
+			}
+		}
+		client.dispose();
+		if (disconnectError !== undefined) {
+			throw disconnectError;
+		}
+	}
 }
 
 /**
@@ -101,21 +104,24 @@ export async function withConnectedDevice<T>(
  * @see PollCommandResult
  */
 export async function runPollingCommands(
-  session: DeviceSession,
-  device: BluettiDevice,
-  commands: readonly ReadHoldingRegisters[],
+	session: DeviceSession,
+	device: BluettiDevice,
+	commands: readonly ReadHoldingRegisters[],
 ): Promise<PollCommandResult[]> {
-  const results: PollCommandResult[] = [];
-  for (const command of commands) {
-    const response = await session.perform(command);
-    const parsed = device.parse(command.startingAddress, command.parseResponse(response));
-    results.push({
-      command,
-      response,
-      parsed,
-    });
-  }
-  return results;
+	const results: PollCommandResult[] = [];
+	for (const command of commands) {
+		const response = await session.perform(command);
+		const parsed = device.parse(
+			command.startingAddress,
+			command.parseResponse(response),
+		);
+		results.push({
+			command,
+			response,
+			parsed,
+		});
+	}
+	return results;
 }
 
 /**
@@ -130,34 +136,37 @@ export async function runPollingCommands(
  * strings to preserve formatting in CLI output.
  */
 export function normalizeValue(value: unknown): unknown {
-  if (typeof value === "bigint") {
-    return value.toString();
-  }
+	if (typeof value === "bigint") {
+		return value.toString();
+	}
 
-  if (Array.isArray(value)) {
-    return value.map((entry) => normalizeValue(entry));
-  }
+	if (Array.isArray(value)) {
+		return value.map((entry) => normalizeValue(entry));
+	}
 
-  if (value && typeof value === "object") {
-    if ("name" in value && "value" in value) {
-      const candidate = value as { name: unknown };
-      if (typeof candidate.name === "string") {
-        return candidate.name;
-      }
-    }
+	if (value && typeof value === "object") {
+		if ("name" in value && "value" in value) {
+			const candidate = value as { name: unknown };
+			if (typeof candidate.name === "string") {
+				return candidate.name;
+			}
+		}
 
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([key, entry]) => {
-        if ((key === "serial_number" || key === "battery_serial_number") && typeof entry === "number") {
-          return [key, String(entry)];
-        }
+		return Object.fromEntries(
+			Object.entries(value as Record<string, unknown>).map(([key, entry]) => {
+				if (
+					(key === "serial_number" || key === "battery_serial_number") &&
+					typeof entry === "number"
+				) {
+					return [key, String(entry)];
+				}
 
-        return [key, normalizeValue(entry)];
-      }),
-    );
-  }
+				return [key, normalizeValue(entry)];
+			}),
+		);
+	}
 
-  return value;
+	return value;
 }
 
 /**
@@ -166,12 +175,12 @@ export function normalizeValue(value: unknown): unknown {
  * @see withConnectedDevice
  */
 export interface ConnectedDeviceContext {
-  /** Bluetooth MAC address of the connected device. */
-  readonly address: string;
-  /** Initialized device session for command execution. */
-  readonly session: DeviceSession;
-  /** Device model for field decoding. */
-  readonly device: BluettiDevice;
+	/** Bluetooth MAC address of the connected device. */
+	readonly address: string;
+	/** Initialized device session for command execution. */
+	readonly session: DeviceSession;
+	/** Device model for field decoding. */
+	readonly device: BluettiDevice;
 }
 
 /**
@@ -180,12 +189,12 @@ export interface ConnectedDeviceContext {
  * @see runPollingCommands
  */
 export interface PollCommandResult {
-  /** The read command that was executed. */
-  readonly command: ReadHoldingRegisters;
-  /** Raw response bytes from the device. */
-  readonly response: Uint8Array;
-  /** Decoded field map from parsing the response. */
-  readonly parsed: Record<string, unknown>;
+	/** The read command that was executed. */
+	readonly command: ReadHoldingRegisters;
+	/** Raw response bytes from the device. */
+	readonly response: Uint8Array;
+	/** Decoded field map from parsing the response. */
+	readonly parsed: Record<string, unknown>;
 }
 
 /**
@@ -195,7 +204,7 @@ export interface PollCommandResult {
  * @returns `true` when `--help` or `-h` is present.
  */
 export function hasHelpFlag(argv: readonly string[]): boolean {
-  return argv.includes(HELP_LONG_FLAG) || argv.includes(HELP_SHORT_FLAG);
+	return argv.includes(HELP_LONG_FLAG) || argv.includes(HELP_SHORT_FLAG);
 }
 
 /**
@@ -210,16 +219,19 @@ export function hasHelpFlag(argv: readonly string[]): boolean {
  *
  * @see validateBluetoothAddress
  */
-export function requireSingleAddressArg(argv: readonly string[], helpText: string): string {
-  if (hasHelpFlag(argv)) {
-    throw new HelpError(helpText);
-  }
+export function requireSingleAddressArg(
+	argv: readonly string[],
+	helpText: string,
+): string {
+	if (hasHelpFlag(argv)) {
+		throw new HelpError(helpText);
+	}
 
-  if (argv.length !== 1 || !argv[0]) {
-    throw new UsageError(helpText);
-  }
+	if (argv.length !== 1 || !argv[0]) {
+		throw new UsageError(helpText);
+	}
 
-  return validateBluetoothAddress(argv[0]);
+	return validateBluetoothAddress(argv[0]);
 }
 
 /**
@@ -234,16 +246,19 @@ export function requireSingleAddressArg(argv: readonly string[], helpText: strin
  *
  * @see validateBluetoothAddress
  */
-export function optionalSingleAddressArg(argv: readonly string[], helpText: string): string | undefined {
-  if (hasHelpFlag(argv)) {
-    throw new HelpError(helpText);
-  }
+export function optionalSingleAddressArg(
+	argv: readonly string[],
+	helpText: string,
+): string | undefined {
+	if (hasHelpFlag(argv)) {
+		throw new HelpError(helpText);
+	}
 
-  if (argv.length > 1) {
-    throw new UsageError(helpText);
-  }
+	if (argv.length > 1) {
+		throw new UsageError(helpText);
+	}
 
-  return argv[0] ? validateBluetoothAddress(argv[0]) : undefined;
+	return argv[0] ? validateBluetoothAddress(argv[0]) : undefined;
 }
 
 /**
@@ -258,23 +273,24 @@ export function optionalSingleAddressArg(argv: readonly string[], helpText: stri
  * can flush.
  */
 export function runCli(main: () => Promise<void>): void {
-  void main().catch((error: unknown) => {
-    if (error instanceof HelpError) {
-      console.log(error.message);
-      process.exitCode = 0;
-      return;
-    }
+	void main().catch((error: unknown) => {
+		if (error instanceof HelpError) {
+			console.log(error.message);
+			process.exitCode = 0;
+			return;
+		}
 
-    if (error instanceof UsageError) {
-      console.error(error.message);
-      process.exitCode = 1;
-      return;
-    }
+		if (error instanceof UsageError) {
+			console.error(error.message);
+			process.exitCode = 1;
+			return;
+		}
 
-    const message = error instanceof Error ? error.stack ?? error.message : String(error);
-    console.error(message);
-    process.exitCode = 1;
-  });
+		const message =
+			error instanceof Error ? (error.stack ?? error.message) : String(error);
+		console.error(message);
+		process.exitCode = 1;
+	});
 }
 
 /**
@@ -287,29 +303,32 @@ export function runCli(main: () => Promise<void>): void {
  * The handler is idempotent: repeated signals are ignored after the first
  * invocation. Errors from `onSignal` are printed to stderr with exit code 1.
  */
-export function installSignalHandlers(onSignal: () => void | Promise<void>): () => void {
-  let stopping = false;
+export function installSignalHandlers(
+	onSignal: () => void | Promise<void>,
+): () => void {
+	let stopping = false;
 
-  const handler = (): void => {
-    if (stopping) {
-      return;
-    }
+	const handler = (): void => {
+		if (stopping) {
+			return;
+		}
 
-    stopping = true;
-    void Promise.resolve(onSignal()).catch((error: unknown) => {
-      const message = error instanceof Error ? error.stack ?? error.message : String(error);
-      console.error(message);
-      process.exitCode = 1;
-    });
-  };
+		stopping = true;
+		void Promise.resolve(onSignal()).catch((error: unknown) => {
+			const message =
+				error instanceof Error ? (error.stack ?? error.message) : String(error);
+			console.error(message);
+			process.exitCode = 1;
+		});
+	};
 
-  process.on(SIGNAL_INTERRUPT, handler);
-  process.on(SIGNAL_TERMINATE, handler);
+	process.on(SIGNAL_INTERRUPT, handler);
+	process.on(SIGNAL_TERMINATE, handler);
 
-  return () => {
-    process.off(SIGNAL_INTERRUPT, handler);
-    process.off(SIGNAL_TERMINATE, handler);
-  };
+	return () => {
+		process.off(SIGNAL_INTERRUPT, handler);
+		process.off(SIGNAL_TERMINATE, handler);
+	};
 }
 
 /**
@@ -320,23 +339,19 @@ export function installSignalHandlers(onSignal: () => void | Promise<void>): () 
  * @throws {UsageError} When the address does not match any accepted format.
  */
 export function validateBluetoothAddress(address: string): string {
-  const normalized = address.trim().toUpperCase();
-  const patterns = [
-    MAC_COLON_PATTERN,
-    MAC_HYPHEN_PATTERN,
-    MAC_COMPACT_PATTERN,
-  ];
+	const normalized = address.trim().toUpperCase();
+	const patterns = [MAC_COLON_PATTERN, MAC_HYPHEN_PATTERN, MAC_COMPACT_PATTERN];
 
-  if (!patterns.some((pattern) => pattern.test(normalized))) {
-    throw new UsageError(
-      `Invalid Bluetooth address '${address}'. Expected 12 hex digits, for example 24:4C:AB:2C:24:8E.`,
-    );
-  }
+	if (!patterns.some((pattern) => pattern.test(normalized))) {
+		throw new UsageError(
+			`Invalid Bluetooth address '${address}'. Expected 12 hex digits, for example 24:4C:AB:2C:24:8E.`,
+		);
+	}
 
-  if (normalized.includes(":")) {
-    return normalized;
-  }
+	if (normalized.includes(":")) {
+		return normalized;
+	}
 
-  const compact = normalized.replace(/-/g, "");
-  return compact.match(/.{2}/g)?.join(":") ?? normalized;
+	const compact = normalized.replace(/-/g, "");
+	return compact.match(/.{2}/g)?.join(":") ?? normalized;
 }

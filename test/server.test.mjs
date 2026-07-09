@@ -9,82 +9,87 @@ import { BadConnectionError } from "../dist/bluetooth/errors.js";
  * warnings instead of propagating as hard errors.
  */
 async function run() {
-  await testCleanupErrorsAreWarnings();
-  console.log("server smoke test passed");
+	await testCleanupErrorsAreWarnings();
+	console.log("server smoke test passed");
 }
 
 /** A transport disconnect failure during server cleanup is logged as a warning. */
 async function testCleanupErrorsAreWarnings() {
-  const logger = new CapturingLogger();
-  const server = new BluettiMqttServer({
-    addresses: ["00:11:22:33:44:55"],
-    transportFactory: new DisconnectFailingTransportFactory(
-      new BadConnectionError("command_failed: Cannot access a disposed object."),
-    ),
-    mqtt: { url: "mock://broker" },
-    runOnce: true,
-    logger,
-  });
+	const logger = new CapturingLogger();
+	const server = new BluettiMqttServer({
+		addresses: ["00:11:22:33:44:55"],
+		transportFactory: new DisconnectFailingTransportFactory(
+			new BadConnectionError(
+				"command_failed: Cannot access a disposed object.",
+			),
+		),
+		mqtt: { url: "mock://broker" },
+		runOnce: true,
+		logger,
+	});
 
-  server.mqttBridge.run = async () => {};
-  server.mqttBridge.stop = async () => {};
+	server.mqttBridge.run = async () => {};
+	server.mqttBridge.stop = async () => {};
 
-  await server.run();
+	await server.run();
 
-  assert.equal(logger.warnings.length, 1);
-  assert.equal(logger.warnings[0].message, "Bluetooth cleanup failed");
-  assert.match(logger.warnings[0].context.error, /Cannot access a disposed object/);
+	assert.equal(logger.warnings.length, 1);
+	assert.equal(logger.warnings[0].message, "Bluetooth cleanup failed");
+	assert.match(
+		logger.warnings[0].context.error,
+		/Cannot access a disposed object/,
+	);
 }
 
 /** Transport factory that always produces transports whose disconnect call fails. */
 class DisconnectFailingTransportFactory {
-  constructor(errorToThrow) {
-    this.errorToThrow = errorToThrow;
-  }
+	constructor(errorToThrow) {
+		this.errorToThrow = errorToThrow;
+	}
 
-  create() {
-    return new DisconnectFailingTransport(this.errorToThrow);
-  }
+	create() {
+		return new DisconnectFailingTransport(this.errorToThrow);
+	}
 }
 
 /** Bluetooth transport whose disconnect method always throws. */
 class DisconnectFailingTransport {
-  constructor(errorToThrow) {
-    this.errorToThrow = errorToThrow;
-  }
+	constructor(errorToThrow) {
+		this.errorToThrow = errorToThrow;
+	}
 
-  async connect() {}
+	async connect() {}
 
-  async disconnect() {
-    throw this.errorToThrow;
-  }
+	async disconnect() {
+		throw this.errorToThrow;
+	}
 
-  async readCharacteristic(uuid) {
-    if (uuid === "00002a00-0000-1000-8000-00805f9b34fb") {
-      return Buffer.from("AC5001234567890", "ascii");
-    }
+	async readCharacteristic(uuid) {
+		if (uuid === "00002a00-0000-1000-8000-00805f9b34fb") {
+			return Buffer.from("AC5001234567890", "ascii");
+		}
 
-    return new Uint8Array(0);
-  }
+		return new Uint8Array(0);
+	}
 
-  async writeCharacteristic() {}
+	async writeCharacteristic() {}
 
-  async subscribe() {}
+	async subscribe() {}
 }
 
 /** Logger that captures warning messages for assertion. */
 class CapturingLogger {
-  warnings = [];
+	warnings = [];
 
-  debug() {}
+	debug() {}
 
-  info() {}
+	info() {}
 
-  warn(message, context) {
-    this.warnings.push({ message, context });
-  }
+	warn(message, context) {
+		this.warnings.push({ message, context });
+	}
 
-  error() {}
+	error() {}
 }
 
 await run();
