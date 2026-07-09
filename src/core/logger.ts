@@ -6,6 +6,8 @@
  *
  * @see ConsoleLogger
  */
+import { DEFAULT_LOG_LEVEL } from "./constants.js";
+
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
 /**
@@ -80,7 +82,7 @@ export class ConsoleLogger implements Logger {
    *
    * @param minimumLevel - Lowest severity to emit (default `"info"`).
    */
-  constructor(private readonly minimumLevel: LogLevel = "info") {}
+  constructor(private readonly minimumLevel: LogLevel = DEFAULT_LOG_LEVEL) {}
 
   /** @inheritdoc */
   debug(message: string, context?: Record<string, unknown>): void {

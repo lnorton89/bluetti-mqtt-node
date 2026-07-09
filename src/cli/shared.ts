@@ -4,6 +4,15 @@ import type { BluetoothTransport } from "@bluetooth/transport.js";
 import type { ReadHoldingRegisters } from "@core/commands.js";
 import type { BluettiDevice } from "@devices/device.js";
 import { createDeviceFromAdvertisement } from "@devices/registry.js";
+import {
+  HELP_LONG_FLAG,
+  HELP_SHORT_FLAG,
+  MAC_COLON_PATTERN,
+  MAC_COMPACT_PATTERN,
+  MAC_HYPHEN_PATTERN,
+  SIGNAL_INTERRUPT,
+  SIGNAL_TERMINATE,
+} from "./constants.js";
 
 /**
  * User-facing argument or configuration error.
@@ -186,7 +195,7 @@ export interface PollCommandResult {
  * @returns `true` when `--help` or `-h` is present.
  */
 export function hasHelpFlag(argv: readonly string[]): boolean {
-  return argv.includes("--help") || argv.includes("-h");
+  return argv.includes(HELP_LONG_FLAG) || argv.includes(HELP_SHORT_FLAG);
 }
 
 /**
@@ -294,12 +303,12 @@ export function installSignalHandlers(onSignal: () => void | Promise<void>): () 
     });
   };
 
-  process.on("SIGINT", handler);
-  process.on("SIGTERM", handler);
+  process.on(SIGNAL_INTERRUPT, handler);
+  process.on(SIGNAL_TERMINATE, handler);
 
   return () => {
-    process.off("SIGINT", handler);
-    process.off("SIGTERM", handler);
+    process.off(SIGNAL_INTERRUPT, handler);
+    process.off(SIGNAL_TERMINATE, handler);
   };
 }
 
@@ -313,9 +322,9 @@ export function installSignalHandlers(onSignal: () => void | Promise<void>): () 
 export function validateBluetoothAddress(address: string): string {
   const normalized = address.trim().toUpperCase();
   const patterns = [
-    /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/,
-    /^([0-9A-F]{2}-){5}[0-9A-F]{2}$/,
-    /^[0-9A-F]{12}$/,
+    MAC_COLON_PATTERN,
+    MAC_HYPHEN_PATTERN,
+    MAC_COMPACT_PATTERN,
   ];
 
   if (!patterns.some((pattern) => pattern.test(normalized))) {

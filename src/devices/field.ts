@@ -1,4 +1,5 @@
 import type { DeviceEnumValue, ParsedValue } from "@core/types.js";
+import { UNKNOWN_ENUM_PREFIX, VERSION_DIVISOR, VERSION_WORD_SHIFT } from "./constants.js";
 
 /**
  * Mapping between stable enum labels and their 16-bit register values.
@@ -19,7 +20,7 @@ export function enumValue<TEnum extends EnumDefinition>(
       return { name, value };
     }
   }
-  return { name: `UNKNOWN_${rawValue}`, value: rawValue };
+  return { name: `${UNKNOWN_ENUM_PREFIX}${rawValue}`, value: rawValue };
 }
 
 function readUint16BigEndian(data: Uint8Array, offset: number): number {
@@ -195,7 +196,7 @@ export class VersionField extends DeviceField<number> {
   parse(data: Uint8Array): number {
     const low = readUint16BigEndian(data, 0);
     const high = readUint16BigEndian(data, 2);
-    return (low + high * 0x1_0000) / 100;
+    return (low + high * VERSION_WORD_SHIFT) / VERSION_DIVISOR;
   }
 }
 

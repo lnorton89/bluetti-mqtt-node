@@ -14,6 +14,7 @@ import {
   type DevicePollingState,
   type DeviceTelemetry,
 } from "./polling-state.js";
+import { MIN_PACK_SWITCH_DELAY_MS } from "./constants.js";
 
 /**
  * Executes read command sets and pack selection on behalf of {@link DeviceHandler}.
@@ -184,7 +185,7 @@ export class DeviceCommandRunner {
         await this.manager.getSession(address).perform(setter);
       });
 
-      await this.sleep(Math.max(500, pollingState.commandDelayMs));
+      await this.sleep(Math.max(MIN_PACK_SWITCH_DELAY_MS, pollingState.commandDelayMs));
       return "ok";
     } catch (error) {
       if (error instanceof DeviceBusyError) {

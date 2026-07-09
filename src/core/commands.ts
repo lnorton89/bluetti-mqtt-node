@@ -1,4 +1,15 @@
 import { appendModbusCrc, hasValidModbusCrc } from "./crc.js";
+import {
+  EXCEPTION_FLAG_MASK,
+  EXCEPTION_FRAME_SIZE,
+  FC_READ_HOLDING_REGISTERS,
+  FC_WRITE_MULTIPLE_REGISTERS,
+  FC_WRITE_SINGLE_REGISTER,
+  MAX_READ_REGISTER_COUNT,
+  MAX_WRITE_REGISTER_COUNT,
+  MODBUS_UNIT_ADDRESS,
+  WRITE_ECHO_SIZE,
+} from "./constants.js";
 
 /**
  * Base class for immutable MODBUS RTU requests sent to a Bluetti device.
@@ -38,7 +49,7 @@ export abstract class DeviceCommand {
     this.functionCode = functionCode;
 
     const body = new Uint8Array(data.length + 2);
-    body[0] = 1;
+    body[0] = MODBUS_UNIT_ADDRESS;
     body[1] = functionCode;
     body.set(data, 2);
     this.frame = appendModbusCrc(body);
@@ -82,9 +93,9 @@ export abstract class DeviceCommand {
    * exceptionCode, crcLo, crcHi]`.
    */
   isExceptionResponse(response: Uint8Array): boolean {
-    return response.length === 5
-      && response[0] === 1
-      && response[1] === this.functionCode + 0x80
+    return response.length === EXCEPTION_FRAME_SIZE
+      && response[0] === MODBUS_UNIT_ADDRESS
+      && response[1] === this.functionCode + EXCEPTION_FLAG_MASK
       && hasValidModbusCrc(response);
   }
 
@@ -97,7 +108,7 @@ export abstract class DeviceCommand {
    */
   isValidResponse(response: Uint8Array): boolean {
     return response.length === this.responseSize()
-      && response[0] === 1
+      && response[0] === MODBUS_UNIT_ADDRESS
       && response[1] === this.functionCode
       && hasValidModbusCrc(response);
   }
@@ -166,14 +177,14 @@ export class ReadHoldingRegisters extends DeviceCommand {
    * @throws {RangeError} When `quantity` is not in `[1, 125]`.
    */
   constructor(startingAddress: number, quantity: number) {
-    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 125) {
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_READ_REGISTER_COUNT) {
       throw new RangeError(`Read quantity must be an integer from 1 to 125, got ${quantity}`);
     }
 
     const data = new Uint8Array(4);
     writeUint16BigEndian(data, 0, startingAddress);
     writeUint16BigEndian(data, 2, quantity);
-    super(3, data);
+    super(FC_READ_HOLDING_REGISTERS, data);
     this.startingAddress = startingAddress;
     this.quantity = quantity;
   }
@@ -238,14 +249,14 @@ export class WriteSingleRegister extends DeviceCommand {
     const data = new Uint8Array(4);
     writeUint16BigEndian(data, 0, address);
     writeUint16BigEndian(data, 2, value);
-    super(6, data);
+    super(FC_WRITE_SINGLE_REGISTER, data);
     this.address = address;
     this.value = value;
   }
 
   /** @returns Fixed echo-response length of 8 bytes. */
   responseSize(): number {
-    return 8;
+    return WRITE_ECHO_SIZE;
   }
 
   /**
@@ -309,7 +320,7 @@ export class WriteMultipleRegisters extends DeviceCommand {
     }
 
     const registerCount = data.length / 2;
-    if (registerCount < 1 || registerCount > 123) {
+    if (registerCount < 1 || registerCount > MAX_WRITE_REGISTER_COUNT) {
       throw new RangeError(`Write quantity must be from 1 to 123 registers, got ${registerCount}`);
     }
 
@@ -318,14 +329,14 @@ export class WriteMultipleRegisters extends DeviceCommand {
     writeUint16BigEndian(body, 2, registerCount);
     body[4] = data.length;
     body.set(data, 5);
-    super(16, body);
+    super(FC_WRITE_MULTIPLE_REGISTERS, body);
     this.startingAddress = startingAddress;
     this.data = data.slice();
   }
 
   /** @returns Fixed echo-response length of 8 bytes. */
   responseSize(): number {
-    return 8;
+    return WRITE_ECHO_SIZE;
   }
 
   /**

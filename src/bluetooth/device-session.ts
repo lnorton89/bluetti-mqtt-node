@@ -1,4 +1,5 @@
 import { DeviceCommand } from "@core/commands.js";
+import { AT_CONTROL_ADV_MESSAGE, AT_CONTROL_NAME_MESSAGE, GATT_FAILED_UNREACHABLE_TEXT, GATT_UNREACHABLE_TEXT, UNKNOWN_ERROR_CODE, UNREACHABLE_ERROR_TEXT } from "./constants.js";
 import { BadConnectionError, CommandTimeoutError, DeviceBusyError, ModbusError, ParseError } from "./errors.js";
 import type { BluetoothTransport } from "./transport.js";
 
@@ -270,7 +271,7 @@ export class DeviceSession {
    *   {@link ModbusError} for any other code.
    */
   buildModbusException(command: DeviceCommand, response: Uint8Array): ModbusError {
-    const code = response[2] ?? -1;
+    const code = response[2] ?? UNKNOWN_ERROR_CODE;
     if (code === 5) {
       return new DeviceBusyError(`MODBUS exception for function ${command.functionCode}: code ${code}`, code);
     }
@@ -375,9 +376,9 @@ export class DeviceSession {
 function isRetryableInitializationError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   const normalized = message.toLowerCase();
-  return normalized.includes("enumerate gatt services: unreachable")
-    || normalized.includes("failed to enumerate gatt services: unreachable")
-    || normalized.includes("unreachable");
+  return normalized.includes(GATT_UNREACHABLE_TEXT)
+    || normalized.includes(GATT_FAILED_UNREACHABLE_TEXT)
+    || normalized.includes(UNREACHABLE_ERROR_TEXT);
 }
 
 /**
@@ -415,5 +416,5 @@ function concatBytes(left: Uint8Array, right: Uint8Array): Uint8Array<ArrayBuffe
  */
 function isAsciiControlMessage(data: Uint8Array): boolean {
   const text = Buffer.from(data).toString("ascii");
-  return text === "AT+NAME?\r" || text === "AT+ADV?\r";
+  return text === AT_CONTROL_NAME_MESSAGE || text === AT_CONTROL_ADV_MESSAGE;
 }

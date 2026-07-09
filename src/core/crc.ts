@@ -1,5 +1,7 @@
+import { CRC_INITIAL_VALUE, CRC_POLYNOMIAL } from "./constants.js";
+
 /** MODBUS CRC-16 polynomial (bit-reversed `0x8005`). */
-const MODBUS_POLYNOMIAL = 0xa001;
+const MODBUS_POLYNOMIAL = CRC_POLYNOMIAL;
 
 /**
  * Calculates the MODBUS CRC-16 checksum for a byte sequence.
@@ -24,7 +26,7 @@ const MODBUS_POLYNOMIAL = 0xa001;
  * @see hasValidModbusCrc
  */
 export function modbusCrc(data: Uint8Array): number {
-  let crc = 0xffff;
+  let crc = CRC_INITIAL_VALUE;
 
   for (const byte of data) {
     crc ^= byte;

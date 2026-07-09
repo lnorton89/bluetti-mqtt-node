@@ -4,6 +4,14 @@ import type { EventBus, ParserMessage, CommandMessage } from "@core/event-bus.js
 import { ConsoleLogger, type Logger } from "@core/logger.js";
 import type { DeviceEnumValue } from "@core/types.js";
 import type { BluettiDevice } from "@devices/device.js";
+import {
+  BOOLEAN_OFF_VALUE,
+  BOOLEAN_ON_VALUE,
+  COMMAND_SUBSCRIPTION_TOPIC,
+  INTEGER_PAYLOAD_PATTERN,
+  RAW_SNAPSHOT_SUFFIX,
+  STATE_TOPIC_PREFIX,
+} from "./constants.js";
 
 /** Regex matching `bluetti/command/<MODEL>-<SERIAL>/<FIELD>` command topics. */
 const COMMAND_TOPIC = /^bluetti\/command\/([A-Z0-9]+)-(\d+)\/([a-z0-9_]+)$/i;
@@ -158,8 +166,8 @@ export class BluettiMqttBridge {
     this.logger.info("Connected to MQTT broker", { url: this.options.url });
 
     try {
-      await client.subscribe("bluetti/command/#");
-      this.logger.info("Subscribed to MQTT command topics", { topic: "bluetti/command/#" });
+      await client.subscribe(COMMAND_SUBSCRIPTION_TOPIC);
+      this.logger.info("Subscribed to MQTT command topics", { topic: COMMAND_SUBSCRIPTION_TOPIC });
 
       this.removeParserListener = this.bus.addParserListener(async (message) => {
         await this.handleParserMessage(message);
@@ -210,11 +218,11 @@ export class BluettiMqttBridge {
     this.devices.set(deviceKey(message.device), message.device);
 
     for (const [name, value] of Object.entries(message.parsed)) {
-      await client.publish(`bluetti/state/${message.device.type}-${message.device.serialNumber}/${name}`, serializeValue(value));
+      await client.publish(`${STATE_TOPIC_PREFIX}${message.device.type}-${message.device.serialNumber}/${name}`, serializeValue(value));
     }
 
     await client.publish(
-      `bluetti/state/${message.device.type}-${message.device.serialNumber}/_raw`,
+      `${STATE_TOPIC_PREFIX}${message.device.type}-${message.device.serialNumber}/${RAW_SNAPSHOT_SUFFIX}`,
       JSON.stringify(normalizeRecord(message.parsed)),
     );
   }
@@ -327,7 +335,7 @@ async function defaultMqttConnector(
  */
 function serializeValue(value: unknown): string {
   if (typeof value === "boolean") {
-    return value ? "ON" : "OFF";
+    return value ? BOOLEAN_ON_VALUE : BOOLEAN_OFF_VALUE;
   }
 
   if (typeof value === "bigint") {
@@ -353,13 +361,13 @@ function serializeValue(value: unknown): string {
  * @returns `true`/`false` for ON/OFF, `number` for integers, or the raw string.
  */
 function parseCommandValue(payload: string): boolean | number | string {
-  if (payload === "ON") {
+  if (payload === BOOLEAN_ON_VALUE) {
     return true;
   }
-  if (payload === "OFF") {
+  if (payload === BOOLEAN_OFF_VALUE) {
     return false;
   }
-  if (/^-?\d+$/.test(payload)) {
+  if (INTEGER_PAYLOAD_PATTERN.test(payload)) {
     return Number(payload);
   }
   return payload;

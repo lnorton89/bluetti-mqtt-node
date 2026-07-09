@@ -18,6 +18,17 @@ import type {
   HelperScanDevice,
 } from "./helper-protocol.js";
 import { BadConnectionError } from "./errors.js";
+import {
+  DEFAULT_REQUEST_TIMEOUT_MS,
+  DEFAULT_SCAN_TIMEOUT_MS,
+  DEFAULT_WITHOUT_RESPONSE,
+  DISPOSED_OBJECT_ERROR_TEXT,
+  HELPER_ERROR_COMMAND_FAILED,
+  HELPER_EVENT_NOTIFICATION,
+  HELPER_MESSAGE_TYPE_EVENT,
+  SCAN_TIMEOUT_BUFFER_MS,
+  UNREACHABLE_ERROR_TEXT,
+} from "./constants.js";
 
 /** Directory of this module (used to resolve package-relative paths). */
 const MODULE_DIRECTORY = dirname(fileURLToPath(import.meta.url));
@@ -38,8 +49,6 @@ const SOURCE_HELPER_PROJECT = resolve(
   "BluettiMqtt.BluetoothHelper",
   "BluettiMqtt.BluetoothHelper.csproj",
 );
-/** Default per-request deadline (30 seconds). */
-const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
 /**
  * Manages the native Windows helper process and its JSON-lines request protocol.
@@ -169,11 +178,11 @@ export class WindowsHelperClient implements BluetoothDiscovery {
    * The request timeout is set to `max(requestTimeoutMs, timeoutMs + 5s)` to
    * ensure the request does not time out before the scan completes.
    */
-  async scan(timeoutMs = 5_000): Promise<readonly HelperScanDevice[]> {
+  async scan(    timeoutMs = DEFAULT_SCAN_TIMEOUT_MS): Promise<readonly HelperScanDevice[]> {
     const payload = await this.request(
       "scan",
       { timeoutMs },
-      Math.max(this.requestTimeoutMs, timeoutMs + 5_000),
+      Math.max(this.requestTimeoutMs, timeoutMs + SCAN_TIMEOUT_BUFFER_MS),
     );
     const devices = payload?.devices;
     if (!Array.isArray(devices)) {
@@ -236,7 +245,7 @@ export class WindowsHelperClient implements BluetoothDiscovery {
     sessionId: string,
     uuid: string,
     data: Uint8Array,
-    withoutResponse = false,
+    withoutResponse = DEFAULT_WITHOUT_RESPONSE,
   ): Promise<void> {
     await this.request("writeCharacteristic", {
       sessionId,
@@ -469,13 +478,13 @@ function createHelperError(code: string, message: string): Error {
  *   a disposed GATT object or unreachable device.
  */
 function isRecoverableBluetoothConnectionError(code: string, message: string): boolean {
-  if (code !== "command_failed") {
+  if (code !== HELPER_ERROR_COMMAND_FAILED) {
     return false;
   }
 
   const normalizedMessage = message.toLowerCase();
-  return normalizedMessage.includes("cannot access a disposed object")
-    || normalizedMessage.includes("unreachable");
+  return normalizedMessage.includes(DISPOSED_OBJECT_ERROR_TEXT)
+    || normalizedMessage.includes(UNREACHABLE_ERROR_TEXT);
 }
 
 /**
@@ -586,7 +595,7 @@ function isHelperConnectPayload(value: unknown): value is HelperConnectPayload {
  * @returns `true` when the message is a notification event.
  */
 function isHelperNotificationEvent(message: HelperMessage): message is HelperNotificationEvent {
-  return message.type === "event" && message.name === "notification";
+  return message.type === HELPER_MESSAGE_TYPE_EVENT && message.name === HELPER_EVENT_NOTIFICATION;
 }
 
 

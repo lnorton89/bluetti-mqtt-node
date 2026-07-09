@@ -9,6 +9,8 @@
  * @see DeviceSession.perform
  * @see MultiDeviceManager.reconnect
  */
+import { DEFAULT_DEVICE_BUSY_MESSAGE, MODBUS_BUSY_EXCEPTION_CODE } from "./constants.js";
+
 export class BadConnectionError extends Error {}
 
 /**
@@ -57,7 +59,7 @@ export class DeviceBusyError extends ModbusError {
    * @param message - Human-readable description (default: `"Device reported MODBUS busy"`).
    * @param code - MODBUS exception code (default: `5`).
    */
-  constructor(message = "Device reported MODBUS busy", code = 5) {
+  constructor(message = DEFAULT_DEVICE_BUSY_MESSAGE, code = MODBUS_BUSY_EXCEPTION_CODE) {
     super(message, code);
   }
 }
