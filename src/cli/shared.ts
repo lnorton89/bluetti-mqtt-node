@@ -1,9 +1,9 @@
-import { DeviceSession } from "../bluetooth/device-session.js";
-import { WindowsHelperClient, createWindowsHelperRuntime } from "../bluetooth/helper-client.js";
-import type { BluetoothTransport } from "../bluetooth/transport.js";
-import type { ReadHoldingRegisters } from "../core/commands.js";
-import type { BluettiDevice } from "../devices/device.js";
-import { createDeviceFromAdvertisement } from "../devices/registry.js";
+import { DeviceSession } from "@bluetooth/device-session.js";
+import { WindowsHelperClient, createWindowsHelperRuntime } from "@bluetooth/helper-client.js";
+import type { BluetoothTransport } from "@bluetooth/transport.js";
+import type { ReadHoldingRegisters } from "@core/commands.js";
+import type { BluettiDevice } from "@devices/device.js";
+import { createDeviceFromAdvertisement } from "@devices/registry.js";
 
 /**
  * User-facing argument or configuration error.

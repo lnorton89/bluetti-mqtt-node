@@ -1,6 +1,6 @@
-import { BadConnectionError } from "../bluetooth/errors.js";
-import { MultiDeviceManager } from "../bluetooth/manager.js";
-import { type Logger } from "../core/logger.js";
+import { BadConnectionError } from "@bluetooth/errors.js";
+import { MultiDeviceManager } from "@bluetooth/manager.js";
+import { type Logger } from "@core/logger.js";
 import { formatError, STARTUP_RETRY_DELAY_MS } from "./polling-state.js";
 
 /**

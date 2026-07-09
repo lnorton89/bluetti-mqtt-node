@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import { WindowsHelperClient, createWindowsHelperRuntime } from "../bluetooth/helper-client.js";
-import { BluettiMqttServer } from "../app/server.js";
-import { ConsoleLogger, type LogLevel } from "../core/logger.js";
+import { WindowsHelperClient, createWindowsHelperRuntime } from "@bluetooth/helper-client.js";
+import { BluettiMqttServer } from "@app/server.js";
+import { ConsoleLogger, type LogLevel } from "@core/logger.js";
 import { HelpError, installSignalHandlers, runCli, UsageError, validateBluetoothAddress } from "./shared.js";
 import { requireValue, parseIntervalSeconds, parseLogLevel, readConfigFile } from "./cli-config.js";
 

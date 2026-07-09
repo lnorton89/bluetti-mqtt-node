@@ -1,9 +1,9 @@
-import { MultiDeviceManager } from "../bluetooth/manager.js";
-import { DeviceCommand } from "../core/commands.js";
-import { EventBus } from "../core/event-bus.js";
-import { ConsoleLogger, type Logger } from "../core/logger.js";
-import { createDeviceFromAdvertisement } from "../devices/registry.js";
-import type { BluettiDevice } from "../devices/device.js";
+import { MultiDeviceManager } from "@bluetooth/manager.js";
+import { DeviceCommand } from "@core/commands.js";
+import { EventBus } from "@core/event-bus.js";
+import { ConsoleLogger, type Logger } from "@core/logger.js";
+import { createDeviceFromAdvertisement } from "@devices/registry.js";
+import type { BluettiDevice } from "@devices/device.js";
 import {
   applyBusyBackoff,
   BUSY_WARNING_INTERVAL_MS,

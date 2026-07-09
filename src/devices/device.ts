@@ -1,5 +1,5 @@
-import { ReadHoldingRegisters, WriteSingleRegister } from "../core/commands.js";
-import { isAddressWritable, type WritableRange } from "../core/types.js";
+import { ReadHoldingRegisters, WriteSingleRegister } from "@core/commands.js";
+import { isAddressWritable, type WritableRange } from "@core/types.js";
 import { BoolField, EnumField } from "./field.js";
 import { DeviceStruct } from "./struct.js";
 

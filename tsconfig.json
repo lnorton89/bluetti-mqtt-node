@@ -8,12 +8,20 @@
     "declaration": true,
     "outDir": "./dist",
     "rootDir": "./src",
+    "paths": {
+      "@core/*": ["./src/core/*"],
+      "@bluetooth/*": ["./src/bluetooth/*"],
+      "@devices/*": ["./src/devices/*"],
+      "@app/*": ["./src/app/*"],
+      "@cli/*": ["./src/cli/*"]
+    },
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,
     "noUnusedLocals": true,
-    "noUnusedParameters": true
+    "noUnusedParameters": true,
+    "ignoreDeprecations": "6.0"
   },
   "include": ["src/**/*.ts"],
   "exclude": ["dist", "node_modules"]

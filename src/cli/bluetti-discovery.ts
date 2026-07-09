@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { WindowsHelperClient, createWindowsHelperRuntime } from "../bluetooth/helper-client.js";
+import { WindowsHelperClient, createWindowsHelperRuntime } from "@bluetooth/helper-client.js";
 import { hasHelpFlag, HelpError, runCli } from "./shared.js";
 
 /** CLI usage text printed by `--help`. */

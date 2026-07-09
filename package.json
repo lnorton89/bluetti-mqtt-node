@@ -43,7 +43,7 @@
     "bluetti-discovery": "node ./dist/cli/bluetti-discovery.js",
     "bluetti-logger": "node ./dist/cli/bluetti-logger.js",
     "bluetti-mqtt": "node ./dist/cli/bluetti-mqtt.js",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/postbuild.mjs",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true }); require('node:fs').rmSync('artifacts', { recursive: true, force: true })\"",
     "helper:build": "dotnet build helper\\BluettiMqtt.BluetoothHelper\\BluettiMqtt.BluetoothHelper.csproj",
     "helper:publish": "npm run helper:publish:self-contained",
@@ -63,6 +63,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
+    "tsc-alias": "^1.9.0",
     "typescript": "^6.0.2"
   }
 }

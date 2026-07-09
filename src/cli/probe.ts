@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
-import { DeviceSession } from "../bluetooth/device-session.js";
-import { WindowsHelperClient, createWindowsHelperRuntime } from "../bluetooth/helper-client.js";
-import type { BluetoothTransport } from "../bluetooth/transport.js";
-import { ReadHoldingRegisters } from "../core/commands.js";
-import { createDeviceFromAdvertisement } from "../devices/registry.js";
+import { DeviceSession } from "@bluetooth/device-session.js";
+import { WindowsHelperClient, createWindowsHelperRuntime } from "@bluetooth/helper-client.js";
+import type { BluetoothTransport } from "@bluetooth/transport.js";
+import { ReadHoldingRegisters } from "@core/commands.js";
+import { createDeviceFromAdvertisement } from "@devices/registry.js";
 import { hasHelpFlag, HelpError, optionalSingleAddressArg, runCli } from "./shared.js";
 
 /** CLI usage text printed by `--help` or on argument errors. */

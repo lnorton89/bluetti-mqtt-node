@@ -1,4 +1,4 @@
-import type { DeviceEnumValue, ParsedValue } from "../core/types.js";
+import type { DeviceEnumValue, ParsedValue } from "@core/types.js";
 
 /**
  * Mapping between stable enum labels and their 16-bit register values.

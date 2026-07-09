@@ -1,9 +1,9 @@
 import { connectAsync, type MqttClient as RawMqttClient } from "mqtt";
-import { ReadHoldingRegisters, type DeviceCommand } from "../core/commands.js";
-import type { EventBus, ParserMessage, CommandMessage } from "../core/event-bus.js";
-import { ConsoleLogger, type Logger } from "../core/logger.js";
-import type { DeviceEnumValue } from "../core/types.js";
-import type { BluettiDevice } from "../devices/device.js";
+import { ReadHoldingRegisters, type DeviceCommand } from "@core/commands.js";
+import type { EventBus, ParserMessage, CommandMessage } from "@core/event-bus.js";
+import { ConsoleLogger, type Logger } from "@core/logger.js";
+import type { DeviceEnumValue } from "@core/types.js";
+import type { BluettiDevice } from "@devices/device.js";
 
 /** Regex matching `bluetti/command/<MODEL>-<SERIAL>/<FIELD>` command topics. */
 const COMMAND_TOPIC = /^bluetti\/command\/([A-Z0-9]+)-(\d+)\/([a-z0-9_]+)$/i;

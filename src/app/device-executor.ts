@@ -4,11 +4,11 @@ import {
   DeviceBusyError,
   ModbusError,
   ParseError,
-} from "../bluetooth/errors.js";
-import { MultiDeviceManager } from "../bluetooth/manager.js";
-import { type DeviceCommand, ReadHoldingRegisters } from "../core/commands.js";
-import { type CommandMessage, EventBus } from "../core/event-bus.js";
-import type { BluettiDevice } from "../devices/device.js";
+} from "@bluetooth/errors.js";
+import { MultiDeviceManager } from "@bluetooth/manager.js";
+import { type DeviceCommand, ReadHoldingRegisters } from "@core/commands.js";
+import { type CommandMessage, EventBus } from "@core/event-bus.js";
+import type { BluettiDevice } from "@devices/device.js";
 import {
   type CommandResult,
   type DevicePollingState,

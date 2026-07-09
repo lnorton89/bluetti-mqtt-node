@@ -1,4 +1,4 @@
-import { DeviceCommand } from "../core/commands.js";
+import { DeviceCommand } from "@core/commands.js";
 import { BadConnectionError, CommandTimeoutError, DeviceBusyError, ModbusError, ParseError } from "./errors.js";
 import type { BluetoothTransport } from "./transport.js";
 

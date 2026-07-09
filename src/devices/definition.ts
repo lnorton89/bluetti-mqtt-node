@@ -1,5 +1,5 @@
-import { ReadHoldingRegisters } from "../core/commands.js";
-import type { WritableRange } from "../core/types.js";
+import { ReadHoldingRegisters } from "@core/commands.js";
+import type { WritableRange } from "@core/types.js";
 import { BluettiDevice } from "./device.js";
 import {
   buildAc200mStruct,

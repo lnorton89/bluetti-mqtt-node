@@ -1,4 +1,4 @@
-import type { ParsedFieldMap } from "../core/types.js";
+import type { ParsedFieldMap } from "@core/types.js";
 import {
   BoolField,
   DecimalArrayField,
