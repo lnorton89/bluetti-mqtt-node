@@ -35,4 +35,4 @@ export * from "@devices/enums.js";
 export * from "@devices/field.js";
 export * from "@devices/registry.js";
 export * from "@devices/struct.js";
-export * from "./mqtt/client.js";
+export * from "@mqtt/client.js";

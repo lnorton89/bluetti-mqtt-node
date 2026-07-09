@@ -13,7 +13,8 @@
       "@bluetooth/*": ["./src/bluetooth/*"],
       "@devices/*": ["./src/devices/*"],
       "@app/*": ["./src/app/*"],
-      "@cli/*": ["./src/cli/*"]
+      "@cli/*": ["./src/cli/*"],
+      "@mqtt/*": ["./src/mqtt/*"]
     },
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,

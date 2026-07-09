@@ -4,7 +4,7 @@ import { DeviceCommand } from "@core/commands.js";
 import { EventBus } from "@core/event-bus.js";
 import { ConsoleLogger, type Logger } from "@core/logger.js";
 import type { BluettiDevice } from "@devices/device.js";
-import { BluettiMqttBridge, type BluettiMqttClientOptions } from "../mqtt/client.js";
+import { BluettiMqttBridge, type BluettiMqttClientOptions } from "@mqtt/client.js";
 import { DeviceHandler, type PollingOptions } from "./device-handler.js";
 
 /**
