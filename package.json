@@ -1,7 +1,16 @@
 {
   "name": "bluetti-mqtt-node",
-  "version": "0.1.0",
-  "description": "Windows-first TypeScript Bluetti BLE to MQTT bridge with a native Windows helper",
+  "version": "1.0.0",
+  "description": "Windows-first TypeScript Bluetti BLE to MQTT bridge with MQTT TLS, structured logging, native Windows BLE helper, and data-driven device registry",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lnorton89/bluetti-mqtt-node.git"
+  },
+  "homepage": "https://github.com/lnorton89/bluetti-mqtt-node#readme",
+  "bugs": {
+    "url": "https://github.com/lnorton89/bluetti-mqtt-node/issues"
+  },
+  "author": "Lawrence Norton",
   "license": "MIT",
   "keywords": [
     "bluetti",
@@ -15,6 +24,9 @@
   "engines": {
     "node": ">=22"
   },
+  "os": [
+    "win32"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -35,11 +47,11 @@
     "config.example.json"
   ],
   "bin": {
-    "bluetti-mqtt-node": "./dist/cli/bluetti-mqtt.js",
-    "bluetti-mqtt-node-discovery": "./dist/cli/bluetti-discovery.js",
-    "bluetti-mqtt-node-logger": "./dist/cli/bluetti-logger.js",
-    "bluetti-mqtt-node-poll": "./dist/cli/poll.js",
-    "bluetti-mqtt-node-probe": "./dist/cli/probe.js"
+    "bluetti-mqtt-node": "dist/cli/bluetti-mqtt.js",
+    "bluetti-mqtt-node-discovery": "dist/cli/bluetti-discovery.js",
+    "bluetti-mqtt-node-logger": "dist/cli/bluetti-logger.js",
+    "bluetti-mqtt-node-poll": "dist/cli/poll.js",
+    "bluetti-mqtt-node-probe": "dist/cli/probe.js"
   },
   "scripts": {
     "bluetti-discovery": "node ./dist/cli/bluetti-discovery.js",

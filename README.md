@@ -6,6 +6,12 @@ This project connects to Bluetti power stations over Bluetooth Low Energy, polls
 
 The repository is designed around Windows as the primary runtime. BLE access is handled by a small .NET helper using native Windows Bluetooth APIs, while the protocol logic, parsing, polling, and MQTT bridge live in TypeScript.
 
+[![CI](https://github.com/lnorton89/bluetti-mqtt-node/actions/workflows/ci.yml/badge.svg)](https://github.com/lnorton89/bluetti-mqtt-node/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node >=22](https://img.shields.io/badge/node-%E2%89%A522-339933)](https://nodejs.org)
+[![Platform: Windows](https://img.shields.io/badge/platform-windows-0078d4)](#)
+[![npm version](https://img.shields.io/npm/v/bluetti-mqtt-node)](https://www.npmjs.com/package/bluetti-mqtt-node)
+
 ## Features
 
 - Windows-native BLE transport
