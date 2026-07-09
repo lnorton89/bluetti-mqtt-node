@@ -1,4 +1,3 @@
-// Covers command/notification framing, timeouts, disconnects, and MODBUS validation.
 import assert from "node:assert/strict";
 import { DeviceSession } from "../dist/bluetooth/device-session.js";
 import { CommandTimeoutError } from "../dist/bluetooth/errors.js";
@@ -6,6 +5,13 @@ import { MockBluetoothTransport } from "../dist/bluetooth/mock-transport.js";
 import { ReadHoldingRegisters, WriteMultipleRegisters, WriteSingleRegister } from "../dist/core/commands.js";
 import { appendModbusCrc } from "../dist/core/crc.js";
 
+/**
+ * Smoke-test runner for DeviceSession and MODBUS command validation.
+ *
+ * Covers chunked response assembly, command timeout recovery, transport
+ * disconnect resilience, and response identity/exception checks for read,
+ * write-single, and write-multiple register commands.
+ */
 async function run() {
   await testChunkedResponse();
   await testCommandTimeout();
@@ -16,6 +22,7 @@ async function run() {
   console.log("device-session smoke test passed");
 }
 
+/** A response arriving in multiple BLE notification chunks is reassembled correctly. */
 async function testChunkedResponse() {
   const transport = new MockBluetoothTransport({
     characteristics: {
@@ -38,6 +45,7 @@ async function testChunkedResponse() {
   assert.deepEqual(command.parseResponse(completed), new Uint8Array([0x00, 0x01, 0x00, 0x02]));
 }
 
+/** A command that receives no response within the timeout produces CommandTimeoutError. */
 async function testCommandTimeout() {
   const transport = new MockBluetoothTransport({
     characteristics: {
@@ -56,6 +64,7 @@ async function testCommandTimeout() {
   assert.equal(session.state, "not_connected");
 }
 
+/** A disconnect call that throws still resets session state and clears the device name. */
 async function testDisconnectFailureStillResetsSessionState() {
   const transport = new DisconnectFailingTransport();
   const session = new DeviceSession("00:11:22:33:44:55", transport);
@@ -68,6 +77,7 @@ async function testDisconnectFailureStillResetsSessionState() {
   assert.equal(session.name, null);
 }
 
+/** Transport stub whose disconnect call always throws. */
 class DisconnectFailingTransport {
   async connect() {}
   async disconnect() {
@@ -80,6 +90,7 @@ class DisconnectFailingTransport {
   async subscribe() {}
 }
 
+/** Validates that isValidResponse rejects wrong device IDs, function codes, and byte counts. */
 function testValidatesModbusResponseIdentityAndPayload() {
   const read = new ReadHoldingRegisters(10, 2);
   const validRead = fullResponse([0x00, 0x01, 0x00, 0x02]);
@@ -98,6 +109,7 @@ function testValidatesModbusResponseIdentityAndPayload() {
   assert.equal(writeMultiple.isValidResponse(withCrc([0x01, 0x10, 0x00, 0x14, 0x00, 0x03])), false);
 }
 
+/** Register quantities outside the permitted 1..125 (read) or 1..123 (write) range are rejected. */
 function testRejectsInvalidRegisterQuantities() {
   assert.throws(() => new ReadHoldingRegisters(0, 0), /1 to 125/);
   assert.throws(() => new ReadHoldingRegisters(0, 126), /1 to 125/);
@@ -105,6 +117,7 @@ function testRejectsInvalidRegisterQuantities() {
   assert.throws(() => new WriteMultipleRegisters(0, new Uint8Array(248)), /1 to 123/);
 }
 
+/** Exception responses are correctly identified and mismatched device IDs or payloads are rejected. */
 function testValidatesCompleteExceptionResponses() {
   const command = new ReadHoldingRegisters(10, 2);
   const valid = withCrc([0x01, 0x83, 0x05]);
@@ -114,15 +127,18 @@ function testValidatesCompleteExceptionResponses() {
   assert.equal(command.isExceptionResponse(withCrc([0x02, 0x83, 0x05])), false);
 }
 
+/** Converts an ASCII string to a byte buffer. */
 function asciiBytes(value) {
   return new Uint8Array(Buffer.from(value, "ascii"));
 }
 
+/** Builds a complete MODBUS read-holding-registers response frame with CRC. */
 function fullResponse(registerBytes) {
   const body = new Uint8Array([0x01, 0x03, registerBytes.length, ...registerBytes]);
   return appendModbusCrc(body);
 }
 
+/** Appends a valid MODBUS CRC to the given frame body bytes. */
 function withCrc(bytes) {
   return appendModbusCrc(new Uint8Array(bytes));
 }

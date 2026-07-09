@@ -1,4 +1,3 @@
-// Covers polling publication, expected failures, shutdown, and reconnect control flow.
 import assert from "node:assert/strict";
 import { DeviceHandler } from "../dist/app/device-handler.js";
 import { EventBus } from "../dist/core/event-bus.js";
@@ -13,6 +12,14 @@ import {
   ParseError,
 } from "../dist/bluetooth/errors.js";
 
+/**
+ * Smoke-test runner for DeviceHandler polling, error recovery, and lifecycle.
+ *
+ * Covers successful message publishing, graceful swallowing of expected
+ * read errors, retry of recoverable startup errors, one-shot error
+ * propagation, reconnection after polling connection loss, and stop
+ * interruption during the poll-interval sleep.
+ */
 async function run() {
   await testPublishesParsedMessages();
   await testSwallowsExpectedReadErrors();
@@ -23,6 +30,7 @@ async function run() {
   console.log("device handler smoke test passed");
 }
 
+/** Parsed device telemetry is published to the event bus. */
 async function testPublishesParsedMessages() {
   const manager = new FakeManager({
     "00:11:22:33:44:55": new FakeSession(new Map([[10, registers([1, 42, 2])]])),
@@ -44,6 +52,7 @@ async function testPublishesParsedMessages() {
   assert.equal(published[0].parsed.dc_output_on, false);
 }
 
+/** Expected read errors (timeout, parse, modbus, bad-connection) are swallowed without publishing. */
 async function testSwallowsExpectedReadErrors() {
   for (const error of [
     new CommandTimeoutError("timeout"),
@@ -68,6 +77,7 @@ async function testSwallowsExpectedReadErrors() {
   }
 }
 
+/** Recoverable startup errors are retried with a warning log until stop is called. */
 async function testRetriesRecoverableStartupErrorsUntilStopped() {
   const manager = new FailingConnectManager(new BadConnectionError("command_failed: Cannot access a disposed object."));
   const logger = new CapturingLogger();
@@ -85,6 +95,7 @@ async function testRetriesRecoverableStartupErrorsUntilStopped() {
   assert.equal(logger.warnings[0].context.error, "command_failed: Cannot access a disposed object.");
 }
 
+/** In runOnce mode a recoverable startup error is propagated as a rejection. */
 async function testRunOncePropagatesRecoverableStartupErrors() {
   const error = new BadConnectionError("command_failed: Cannot access a disposed object.");
   const manager = new FailingConnectManager(error);
@@ -93,6 +104,7 @@ async function testRunOncePropagatesRecoverableStartupErrors() {
   await assert.rejects(handler.run(), error);
 }
 
+/** A BadConnectionError during polling triggers a manager reconnect and emits recovery logs. */
 async function testReconnectsAfterPollingConnectionLoss() {
   const address = "00:11:22:33:44:55";
   const failingSession = new FakeSession(new Map(), new BadConnectionError("write unreachable"));
@@ -114,6 +126,7 @@ async function testReconnectsAfterPollingConnectionLoss() {
   assert.equal(logger.infos[0].message, "Bluetooth connection recovered");
 }
 
+/** Creates a test device with bool and uint fields for handler polling tests. */
 function createTestDevice() {
   const struct = new DeviceStruct()
     .addBoolField("ac_output_on", 10)
@@ -123,6 +136,7 @@ function createTestDevice() {
   return new TestBluettiDevice("00:11:22:33:44:55", "TEST", "1234567890", struct);
 }
 
+/** Calling stop while the handler is sleeping between polls exits the run loop immediately. */
 async function testStopInterruptsSleep() {
   const manager = new FakeManager({
     "00:11:22:33:44:55": new FakeSession(new Map([[10, registers([1, 42, 2])]])),
@@ -135,6 +149,12 @@ async function testStopInterruptsSleep() {
   await runPromise;
 }
 
+/**
+ * Converts an array of 16-bit register words into a big-endian byte buffer.
+ *
+ * @param words - Register values (each 0..0xFFFF).
+ * @returns Big-endian `Uint8Array` of length `words.length * 2`.
+ */
 function registers(words) {
   const bytes = [];
   for (const word of words) {
@@ -143,10 +163,12 @@ function registers(words) {
   return new Uint8Array(bytes);
 }
 
+/** Flushes pending microtasks so async callbacks can settle. */
 async function flushAsync() {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/** Manager stub that returns pre-configured sessions and provides a fixed device name. */
 class FakeManager {
   constructor(sessionsByAddress) {
     this.addresses = Object.keys(sessionsByAddress);
@@ -164,6 +186,7 @@ class FakeManager {
   }
 }
 
+/** Manager stub whose connectAll throws on every call, tracking attempt count. */
 class FailingConnectManager extends FakeManager {
   connectAttempts = 0;
 
@@ -178,6 +201,7 @@ class FailingConnectManager extends FakeManager {
   }
 }
 
+/** Manager stub that swaps from a failing session to a recovered session on reconnect. */
 class RecoveringManager extends FakeManager {
   reconnectAttempts = 0;
 
@@ -192,6 +216,7 @@ class RecoveringManager extends FakeManager {
   }
 }
 
+/** Session stub that returns pre-configured register responses or throws a configured error. */
 class FakeSession {
   constructor(responsesByAddress, errorToThrow) {
     this.responsesByAddress = responsesByAddress;
@@ -213,6 +238,7 @@ class FakeSession {
   }
 }
 
+/** Minimal BluettiDevice subclass for handler testing with a simple field layout. */
 class TestBluettiDevice extends BluettiDevice {
   get pollingCommands() {
     return [new ReadHoldingRegisters(10, 3)];
@@ -223,6 +249,7 @@ class TestBluettiDevice extends BluettiDevice {
   }
 }
 
+/** Logger that captures info and warning messages for post-hoc assertion. */
 class CapturingLogger {
   warnings = [];
   infos = [];

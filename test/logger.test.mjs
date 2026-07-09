@@ -1,9 +1,14 @@
-// Verifies structured logger level filtering and serialization behavior.
 import assert from "node:assert/strict";
 import { ConsoleLogger } from "../dist/core/logger.js";
 
 await run();
 
+/**
+ * Smoke-test runner for ConsoleLogger output format, routing, and filtering.
+ *
+ * Covers JSON structure on stdout/stderr, level-based filtering above the
+ * configured threshold, and BigInt-to-string normalization in context payloads.
+ */
 async function run() {
   testInfoLoggingWritesJson();
   testWarnLoggingUsesStderr();
@@ -12,6 +17,7 @@ async function run() {
   console.log("logger smoke test passed");
 }
 
+/** Info-level output is written as a JSON line to stdout with level, message, context, and timestamp. */
 function testInfoLoggingWritesJson() {
   const stdout = [];
   const stderr = [];
@@ -31,6 +37,7 @@ function testInfoLoggingWritesJson() {
   assert.equal(typeof payload.timestamp, "string");
 }
 
+/** Warn-level output is written as a JSON line to stderr. */
 function testWarnLoggingUsesStderr() {
   const stdout = [];
   const stderr = [];
@@ -45,6 +52,7 @@ function testWarnLoggingUsesStderr() {
   assert.equal(payload.context.retry, true);
 }
 
+/** Messages below the configured log level are silently dropped. */
 function testLevelFiltering() {
   const stdout = [];
   const stderr = [];
@@ -60,6 +68,7 @@ function testLevelFiltering() {
   assert.equal(stderr.length, 2);
 }
 
+/** BigInt values in context are serialised as strings to avoid JSON.stringify failures. */
 function testBigIntContextNormalization() {
   const stdout = [];
   const stderr = [];
@@ -72,6 +81,14 @@ function testBigIntContextNormalization() {
   assert.equal(payload.context.serial, "1234567890123456789");
 }
 
+/**
+ * Temporarily replaces console.log/warn/error with capturing stubs.
+ *
+ * @param stdout - Array that receives console.log calls (as strings).
+ * @param stderr - Array that receives console.warn and console.error calls (as strings).
+ * @param callback - Function to run with captured console methods.
+ * @returns The return value of `callback`.
+ */
 function withCapturedConsole(stdout, stderr, callback) {
   const originalLog = console.log;
   const originalWarn = console.warn;

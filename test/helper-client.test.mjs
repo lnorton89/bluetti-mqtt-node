@@ -1,8 +1,14 @@
-// Exercises helper wire errors and transport rollback without spawning the native helper.
 import assert from "node:assert/strict";
 import { BadConnectionError } from "../dist/bluetooth/errors.js";
 import { WindowsHelperClient, createWindowsHelperRuntime } from "../dist/bluetooth/helper-client.js";
 
+/**
+ * Smoke-test runner for the Windows BLE helper client and its transport.
+ *
+ * Covers notification routing, error-to-exception mapping (including GATT
+ * unreachable and disposed-object detection), malformed JSON handling, and
+ * transport-level subscribe/disconnect/connect rollback behaviour.
+ */
 async function run() {
   testNotificationRouting();
   testErrorMapping();
@@ -16,6 +22,7 @@ async function run() {
   console.log("helper client smoke test passed");
 }
 
+/** A helper "notification" event is routed to registered listeners with base64-decoded data. */
 function testNotificationRouting() {
   const client = makeClientHarness();
   const events = [];
@@ -44,6 +51,7 @@ function testNotificationRouting() {
   }]);
 }
 
+/** A helper "error" response with a generic command_failed code is mapped to a plain Error. */
 function testErrorMapping() {
   const client = makeClientHarness();
   const errors = [];
@@ -71,6 +79,7 @@ function testErrorMapping() {
   assert.match(String(errors[0]), /command_failed: bad address/);
 }
 
+/** A "Cannot access a disposed object" error is mapped to BadConnectionError. */
 function testDisposedObjectErrorMapping() {
   const client = makeClientHarness();
   const errors = [];
@@ -99,6 +108,7 @@ function testDisposedObjectErrorMapping() {
   assert.match(String(errors[0]), /command_failed: Cannot access a disposed object/);
 }
 
+/** A GATT services unreachable error is mapped to BadConnectionError. */
 function testGattUnreachableErrorMapping() {
   const client = makeClientHarness();
   const errors = [];
@@ -127,6 +137,7 @@ function testGattUnreachableErrorMapping() {
   assert.match(String(errors[0]), /command_failed: Failed to enumerate GATT services: Unreachable/);
 }
 
+/** A GATT characteristic write unreachable error is mapped to BadConnectionError. */
 function testGattWriteUnreachableErrorMapping() {
   const client = makeClientHarness();
   const errors = [];
@@ -154,6 +165,7 @@ function testGattWriteUnreachableErrorMapping() {
   assert.ok(errors[0] instanceof BadConnectionError);
 }
 
+/** Malformed JSON before the helper signals ready triggers the error callback. */
 function testMalformedJsonBeforeReady() {
   const client = makeClientHarness();
   const readyErrors = [];
@@ -163,6 +175,7 @@ function testMalformedJsonBeforeReady() {
   assert.equal(readyErrors.length, 1);
 }
 
+/** Creates a minimal WindowsHelperClient instance without a subprocess for unit testing. */
 function makeClientHarness() {
   const client = Object.create(WindowsHelperClient.prototype);
   client.pending = new Map();
@@ -171,6 +184,7 @@ function makeClientHarness() {
   return client;
 }
 
+/** A subscription that fails on the helper side does not register the notification callback. */
 async function testTransportSubscribeRollsBackCallback() {
   const client = new FakeHelperClient();
   const transport = createWindowsHelperRuntime(client).transportFactory.create();
@@ -189,6 +203,7 @@ async function testTransportSubscribeRollsBackCallback() {
   assert.equal(notificationCount, 0);
 }
 
+/** A disconnect that throws still clears local transport state and notification subscriptions. */
 async function testTransportDisconnectCleansLocalStateOnFailure() {
   const client = new FakeHelperClient();
   const transport = createWindowsHelperRuntime(client).transportFactory.create();
@@ -206,6 +221,7 @@ async function testTransportDisconnectCleansLocalStateOnFailure() {
   await assert.rejects(transport.readCharacteristic("characteristic"), /not connected/);
 }
 
+/** A connect that fails during notification wiring still issues a disconnect rollback. */
 async function testTransportConnectRollsBackWhenNotificationWiringFails() {
   const client = new FakeHelperClient();
   client.notificationError = new Error("listener failed");
@@ -217,6 +233,7 @@ async function testTransportConnectRollsBackWhenNotificationWiringFails() {
   await assert.rejects(transport.readCharacteristic("characteristic"), /not connected/);
 }
 
+/** Stub helper client that simulates connect, subscribe, disconnect, and notification flows. */
 class FakeHelperClient {
   listeners = new Set();
   disconnectCalls = [];

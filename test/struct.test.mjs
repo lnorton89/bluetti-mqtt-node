@@ -1,9 +1,14 @@
-// Verifies register-window decoding, field formats, and malformed payload rejection.
 import assert from "node:assert/strict";
 import { DeviceStruct } from "../dist/devices/struct.js";
 
 await run();
 
+/**
+ * Smoke-test runner for DeviceStruct parsing behaviour.
+ *
+ * Exercises string, swap-string, serial-number, version, uint field decoders
+ * along with window-skip, range-skip, word-boundary, and payload validation.
+ */
 async function run() {
   testParsesStringField();
   testParsesSwapStringField();
@@ -16,12 +21,14 @@ async function run() {
   console.log("struct smoke test passed");
 }
 
+/** Decodes a 3-register ASCII string field. */
 function testParsesStringField() {
   const struct = new DeviceStruct().addStringField("device_type", 10, 3);
   const parsed = struct.parse(10, asciiWords("AC500\0"));
   assert.equal(parsed.device_type, "AC500");
 }
 
+/** Decodes a swap-byte string field from raw byte pairs. */
 function testParsesSwapStringField() {
   const struct = new DeviceStruct().addSwapStringField("device_type", 10, 3);
   const parsed = struct.parse(10, new Uint8Array([
@@ -32,18 +39,21 @@ function testParsesSwapStringField() {
   assert.equal(parsed.device_type, "AC500");
 }
 
+/** Decodes a 4-register big-endian serial number into a BigInt. */
 function testParsesSerialNumberField() {
   const struct = new DeviceStruct().addSerialNumberField("serial_number", 10);
   const parsed = struct.parse(10, registers([1, 2, 3, 4]));
   assert.equal(parsed.serial_number, 1n + (2n << 16n) + (3n << 32n) + (4n << 48n));
 }
 
+/** Decodes a version field from major/minor register values (e.g. 234.1 -> 657.7). */
 function testParsesVersionField() {
   const struct = new DeviceStruct().addVersionField("arm_version", 10);
   const parsed = struct.parse(10, registers([234, 1]));
   assert.equal(parsed.arm_version, 657.7);
 }
 
+/** Fields whose register address falls outside the read window are omitted from results. */
 function testSkipsFieldsOutsideWindow() {
   const struct = new DeviceStruct()
     .addUintField("inside", 10)
@@ -52,23 +62,32 @@ function testSkipsFieldsOutsideWindow() {
   assert.deepEqual(parsed, { inside: 7 });
 }
 
+/** Values outside the caller-specified plausibility range are silently dropped. */
 function testSkipsOutOfRangeValues() {
   const struct = new DeviceStruct().addUintField("battery_percent", 10, [0, 100]);
   const parsed = struct.parse(10, registers([101]));
   assert.deepEqual(parsed, {});
 }
 
+/** High 16-bit version word encodes fractions in its upper bits. */
 function testParsesUnsignedHighVersionWord() {
   const struct = new DeviceStruct().addVersionField("arm_version", 10);
   const parsed = struct.parse(10, registers([0, 0xffff]));
   assert.equal(parsed.arm_version, (0xffff * 0x1_0000) / 100);
 }
 
+/** Register payloads with odd byte length trigger a validation error. */
 function testRejectsOddRegisterPayloads() {
   const struct = new DeviceStruct().addUintField("value", 10);
   assert.throws(() => struct.parse(10, new Uint8Array([0x00])), /length must be even/);
 }
 
+/**
+ * Converts an array of 16-bit register words into a big-endian byte buffer.
+ *
+ * @param words - Register values (each 0..0xFFFF).
+ * @returns Big-endian `Uint8Array` of length `words.length * 2`.
+ */
 function registers(words) {
   const bytes = [];
   for (const word of words) {
@@ -77,6 +96,7 @@ function registers(words) {
   return new Uint8Array(bytes);
 }
 
+/** Encodes a string as ASCII bytes for use as register payload data. */
 function asciiWords(value) {
   return new Uint8Array(Buffer.from(value, "ascii"));
 }

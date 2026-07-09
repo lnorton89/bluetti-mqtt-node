@@ -18,6 +18,9 @@ Console.CancelKeyPress += (_, eventArgs) =>
 await using var protocol = new HelperProtocol(Console.In, Console.Out);
 await protocol.RunAsync(cts.Token);
 
+/// <summary>
+/// Processes the JSON-lines command protocol and owns all native connections.
+/// </summary>
 internal sealed class HelperProtocol : IAsyncDisposable
 {
     // Requests are processed serially, while notification events may write from
@@ -34,6 +37,7 @@ internal sealed class HelperProtocol : IAsyncDisposable
         _output = output;
     }
 
+    /// <summary>Runs until stdin closes or cancellation is requested.</summary>
     public async Task RunAsync(CancellationToken cancellationToken)
     {
         await WriteEventAsync(new HelperEvent("ready", new { capabilities = new[] { "scan", "connect", "gatt" } }), cancellationToken);
@@ -105,6 +109,7 @@ internal sealed class HelperProtocol : IAsyncDisposable
         }
     }
 
+    /// <summary>Attempts to release every connection before disposing protocol state.</summary>
     public async ValueTask DisposeAsync()
     {
         var failures = new List<Exception>();
@@ -311,6 +316,9 @@ internal sealed class HelperProtocol : IAsyncDisposable
     }
 }
 
+/// <summary>
+/// Owns the WinRT device, cached GATT objects, and notification handlers for one session.
+/// </summary>
 internal sealed class DeviceConnection : IAsyncDisposable
 {
     // A session caches services/characteristics for its lifetime and owns every
@@ -333,6 +341,7 @@ internal sealed class DeviceConnection : IAsyncDisposable
 
     public string Name { get; }
 
+    /// <summary>Opens a WinRT device and assigns a protocol session identifier.</summary>
     public static async Task<DeviceConnection> CreateAsync(ulong address, Func<NotificationEvent, Task> emitNotification)
     {
         var device = await BluetoothLEDevice.FromBluetoothAddressAsync(address);
@@ -344,6 +353,7 @@ internal sealed class DeviceConnection : IAsyncDisposable
         return new DeviceConnection(device, emitNotification);
     }
 
+    /// <summary>Reads an uncached characteristic value.</summary>
     public async Task<byte[]> ReadCharacteristicAsync(string uuidText)
     {
         var characteristic = await GetCharacteristicAsync(ParseUuid(uuidText));
@@ -352,6 +362,7 @@ internal sealed class DeviceConnection : IAsyncDisposable
         return ReadBytes(result.Value);
     }
 
+    /// <summary>Writes bytes using the requested GATT response mode.</summary>
     public async Task WriteCharacteristicAsync(string uuidText, byte[] data, bool withoutResponse)
     {
         var characteristic = await GetCharacteristicAsync(ParseUuid(uuidText));
@@ -362,6 +373,7 @@ internal sealed class DeviceConnection : IAsyncDisposable
         EnsureSuccess(status, $"write characteristic {uuidText}");
     }
 
+    /// <summary>Enables notifications once and records the installed event handler.</summary>
     public async Task SubscribeAsync(string uuidText)
     {
         var uuid = ParseUuid(uuidText);
@@ -392,6 +404,7 @@ internal sealed class DeviceConnection : IAsyncDisposable
         }
     }
 
+    /// <summary>Detaches handlers and attempts every native cleanup step.</summary>
     public async ValueTask DisposeAsync()
     {
         var failures = new List<Exception>();

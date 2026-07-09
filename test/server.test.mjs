@@ -1,13 +1,19 @@
-// Verifies top-level server cleanup remains best-effort when transports fail.
 import assert from "node:assert/strict";
 import { BluettiMqttServer } from "../dist/app/server.js";
 import { BadConnectionError } from "../dist/bluetooth/errors.js";
 
+/**
+ * Smoke-test runner for BluettiMqttServer lifecycle and error handling.
+ *
+ * Verifies that disconnect failures during cleanup are downgraded to
+ * warnings instead of propagating as hard errors.
+ */
 async function run() {
   await testCleanupErrorsAreWarnings();
   console.log("server smoke test passed");
 }
 
+/** A transport disconnect failure during server cleanup is logged as a warning. */
 async function testCleanupErrorsAreWarnings() {
   const logger = new CapturingLogger();
   const server = new BluettiMqttServer({
@@ -30,6 +36,7 @@ async function testCleanupErrorsAreWarnings() {
   assert.match(logger.warnings[0].context.error, /Cannot access a disposed object/);
 }
 
+/** Transport factory that always produces transports whose disconnect call fails. */
 class DisconnectFailingTransportFactory {
   constructor(errorToThrow) {
     this.errorToThrow = errorToThrow;
@@ -40,6 +47,7 @@ class DisconnectFailingTransportFactory {
   }
 }
 
+/** Bluetooth transport whose disconnect method always throws. */
 class DisconnectFailingTransport {
   constructor(errorToThrow) {
     this.errorToThrow = errorToThrow;
@@ -64,6 +72,7 @@ class DisconnectFailingTransport {
   async subscribe() {}
 }
 
+/** Logger that captures warning messages for assertion. */
 class CapturingLogger {
   warnings = [];
 

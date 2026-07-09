@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-/** Runs the standard polling register set once and prints merged device state. */
 import { WindowsHelperClient, createWindowsHelperRuntime } from "../bluetooth/helper-client.js";
 import {
   hasHelpFlag,
@@ -12,12 +11,21 @@ import {
   withConnectedDevice,
 } from "./shared.js";
 
+/** CLI usage text printed by `--help` or on argument errors. */
 const HELP_TEXT = `Usage: bluetti-mqtt-node-poll [BLUETOOTH_MAC]
 
 Without an address, scan for nearby devices.
 With an address, run the standard polling set and print merged parsed state as JSON.
 `;
 
+/**
+ * Scans without an address or performs one complete polling cycle.
+ *
+ * @remarks
+ * Without an address argument, scans for nearby devices and prints JSON.
+ * With an address, connects, runs the device's `pollingCommands` set, and
+ * prints per-command and merged parsed state as JSON.
+ */
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   if (hasHelpFlag(argv)) {

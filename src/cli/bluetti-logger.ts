@@ -1,13 +1,20 @@
 #!/usr/bin/env node
 
-/** Runs the device's extended logging register set and prints decoded JSON. */
 import { normalizeValue, requireSingleAddressArg, runCli, runPollingCommands, withConnectedDevice } from "./shared.js";
 
+/** CLI usage text printed by `--help` or on argument errors. */
 const HELP_TEXT = `Usage: bluetti-mqtt-node-logger <BLUETOOTH_MAC>
 
 Run the device logging command set and print parsed results as JSON.
 `;
 
+/**
+ * Executes the model-specific diagnostic register windows.
+ *
+ * @remarks
+ * Connects to the device, runs its `loggingCommands` set (broader than
+ * `pollingCommands`), and prints per-command parsed output as JSON.
+ */
 async function main(): Promise<void> {
   const address = requireSingleAddressArg(process.argv.slice(2), HELP_TEXT);
 

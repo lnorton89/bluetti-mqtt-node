@@ -1,7 +1,3 @@
-/**
- * Owns device polling, adaptive backoff, per-device command serialization, and
- * in-process recovery when a Bluetooth session becomes unusable.
- */
 import {
   BadConnectionError,
   CommandTimeoutError,
@@ -15,74 +11,80 @@ import { EventBus, type CommandMessage } from "../core/event-bus.js";
 import { ConsoleLogger, type Logger } from "../core/logger.js";
 import { createDeviceFromAdvertisement } from "../devices/registry.js";
 import type { BluettiDevice } from "../devices/device.js";
+import {
+  applyBusyBackoff,
+  BUSY_WARNING_INTERVAL_MS,
+  type CommandResult,
+  createDevicePollingState,
+  createDeviceTelemetry,
+  type DevicePollingState,
+  type DeviceTelemetry,
+  formatError,
+  normalizePollingOptions,
+  type PollingOptions,
+  recoverPollingState,
+  scheduleNextPoll,
+  STARTUP_RETRY_DELAY_MS,
+  summarizeTelemetry,
+  TELEMETRY_SUMMARY_INTERVAL_MS,
+} from "./polling-state.js";
 
-export interface PollingOptions {
-  readonly fastIntervalMs?: number;
-  readonly fullIntervalMs?: number;
-  readonly commandDelayMs?: number;
-  readonly busyPenaltyMs?: number;
-  readonly recoveryStepMs?: number;
-  readonly maxFastIntervalMs?: number;
-  readonly maxFullIntervalMs?: number;
-  readonly maxCommandDelayMs?: number;
-}
+// Re-export so existing imports from device-handler.js continue to work.
+export type { PollingOptions } from "./polling-state.js";
 
-interface DevicePollingState {
-  nextFastPollAt: number;
-  nextFullPollAt: number;
-  fastIntervalMs: number;
-  fullIntervalMs: number;
-  commandDelayMs: number;
-}
-
-interface DeviceTelemetry {
-  cycleCount: number;
-  fastCycleCount: number;
-  fullCycleCount: number;
-  successfulCommandCount: number;
-  expectedErrorCount: number;
-  busyErrorCount: number;
-  commandWriteCount: number;
-  parserPublishCount: number;
-  totalCycleDurationMs: number;
-  totalCommandDurationMs: number;
-  maxCycleDurationMs: number;
-  maxCommandDurationMs: number;
-  lastCycleStartedAt: string | null;
-  lastCycleCompletedAt: string | null;
-  lastBusyAt: string | null;
-  lastErrorAt: string | null;
-  lastBusyWarningAtMs: number;
-  suppressedBusyWarningCount: number;
-  lastSummaryAtMs: number;
-}
-
-type CommandResult = "ok" | "expected_error" | "busy" | "connection_error";
-
-const DEFAULT_POLLING_OPTIONS: Required<PollingOptions> = {
-  fastIntervalMs: 2_500,
-  fullIntervalMs: 15_000,
-  commandDelayMs: 150,
-  busyPenaltyMs: 750,
-  recoveryStepMs: 50,
-  maxFastIntervalMs: 8_000,
-  maxFullIntervalMs: 45_000,
-  maxCommandDelayMs: 750,
-};
-
-const TELEMETRY_SUMMARY_INTERVAL_MS = 60_000;
-const BUSY_WARNING_INTERVAL_MS = 60_000;
-const STARTUP_RETRY_DELAY_MS = 5_000;
-
+/**
+ * Polls initialized devices and publishes decoded telemetry to the event bus.
+ *
+ * @remarks
+ * Work is serialized per device (via a promise-chain mutex) so external writes
+ * cannot overlap polling reads. Busy responses slow polling gradually using
+ * adaptive backoff; successful cycles restore the configured cadence. Broken
+ * Bluetooth connections are replaced in-process through
+ * {@link MultiDeviceManager.reconnect}.
+ *
+ * Each device runs an independent polling loop. Full cycles include slow
+ * configuration and battery-pack windows; fast cycles read only the leading
+ * live power/state window to minimize latency.
+ *
+ * @example
+ * ```ts
+ * const handler = new DeviceHandler(manager, bus, { fastIntervalMs: 2500 });
+ * await handler.connectAll();
+ * await handler.run();
+ * ```
+ *
+ * @see BluettiMqttServer
+ * @see MultiDeviceManager
+ */
 export class DeviceHandler {
+  /** Device models keyed by Bluetooth address. */
   private readonly devices = new Map<string, BluettiDevice>();
+  /** Per-device adaptive polling schedule state. */
   private readonly pollingState = new Map<string, DevicePollingState>();
+  /** Per-device telemetry counters. */
   private readonly telemetry = new Map<string, DeviceTelemetry>();
+  /** Per-device promise-chain mutex queues for serialized work. */
   private readonly deviceQueues = new Map<string, Promise<void>>();
+  /** Whether the event bus command listener has been installed. */
   private commandListenerAttached = false;
+  /** Whether {@link stop} has been requested. */
   private stopRequested = false;
+  /** Registered wake callbacks for interrupting {@link sleep}. */
   private readonly sleepWaiters = new Set<() => void>();
 
+  /** Resolved polling options with defaults filled in. */
+  private readonly defaultPollingOptions: Required<PollingOptions>;
+
+  /**
+   * Creates a polling handler for one or more devices.
+   *
+   * @param manager - Device session manager owning the BLE connections.
+   * @param bus - Event bus for publishing telemetry and receiving commands.
+   * @param intervalMsOrOptions - Either a legacy interval in milliseconds, or
+   *   a full {@link PollingOptions} object. `0` uses defaults.
+   * @param runOnce - When `true`, performs one poll cycle and exits.
+   * @param logger - Optional logger; defaults to `ConsoleLogger` at `info`.
+   */
   constructor(
     private readonly manager: MultiDeviceManager,
     private readonly bus: EventBus<BluettiDevice, BluettiDevice, DeviceCommand>,
@@ -90,12 +92,20 @@ export class DeviceHandler {
     private readonly runOnce = false,
     private readonly logger: Logger = new ConsoleLogger("info"),
   ) {
-    const options = normalizePollingOptions(intervalMsOrOptions);
-    this.defaultPollingOptions = options;
+    this.defaultPollingOptions = normalizePollingOptions(intervalMsOrOptions);
   }
 
-  private readonly defaultPollingOptions: Required<PollingOptions>;
-
+  /**
+   * Connects all configured devices and initializes their model-specific
+   * polling state.
+   *
+   * @throws {BadConnectionError} When a device fails to connect (after the
+   *   session's internal retries are exhausted).
+   *
+   * @remarks
+   * Also installs the command listener on the event bus (once) so external
+   * MQTT commands can be dispatched to the correct device session.
+   */
   async connectAll(): Promise<void> {
     await this.manager.connectAll();
     if (!this.commandListenerAttached) {
@@ -120,10 +130,25 @@ export class DeviceHandler {
     }
   }
 
+  /**
+   * Returns all currently initialized device models.
+   *
+   * @returns Array of {@link BluettiDevice} instances keyed by address.
+   */
   getDevices(): readonly BluettiDevice[] {
     return [...this.devices.values()];
   }
 
+  /**
+   * Executes the complete polling set once for an initialized address.
+   *
+   * @param address - Bluetooth MAC address of an initialized device.
+   * @throws {Error} When the address is unknown (not connected).
+   *
+   * @remarks
+   * Intended for one-shot CLI usage. Does not start the continuous polling
+   * loop — use {@link DeviceHandler.run} for that.
+   */
   async pollOnce(address: string): Promise<void> {
     const device = this.devices.get(address);
     if (device === undefined) {
@@ -134,6 +159,15 @@ export class DeviceHandler {
     await this.runCommandSet(address, device, device.pollingCommands, state);
   }
 
+  /**
+   * Runs independent polling loops for every configured device.
+   *
+   * @remarks
+   * Starts all loops in parallel via `Promise.all`. Each loop alternates
+   * between fast and full polling cycles based on the adaptive schedule.
+   * Returns when all loops exit (due to {@link stop}, one-shot mode, or
+   * unrecoverable connection loss).
+   */
   async run(): Promise<void> {
     this.stopRequested = false;
     const connected = await this.connectAllWithRecovery();
@@ -160,6 +194,8 @@ export class DeviceHandler {
           continue;
         }
 
+        // Full cycles include slow configuration and battery-pack windows.
+        // Fast cycles read only the leading live power/state window.
         const commands = shouldRunFull
           ? [...device.fastPollingCommands, ...device.slowPollingCommands]
           : [...device.fastPollingCommands];
@@ -247,6 +283,19 @@ export class DeviceHandler {
     }));
   }
 
+  /**
+   * Calls {@link connectAll} with retry-on-failure for recoverable BLE startup
+   * errors.
+   *
+   * @returns `true` when connection succeeds, `false` when stopped before
+   *   success.
+   * @throws {Error} When a non-recoverable error occurs or `runOnce` is set.
+   *
+   * @remarks
+   * Retries {@link BadConnectionError} indefinitely with a fixed delay until
+   * either the connection succeeds or {@link stop} is requested. Non-BLE
+   * errors propagate immediately.
+   */
   private async connectAllWithRecovery(): Promise<boolean> {
     while (!this.stopRequested) {
       try {
@@ -268,10 +317,23 @@ export class DeviceHandler {
     return false;
   }
 
+  /**
+   * Repeatedly attempts to reconnect a lost device until success or stop.
+   *
+   * @param address - Bluetooth MAC address of the device to recover.
+   * @returns `true` when reconnection succeeds, `false` when stopped.
+   *
+   * @remarks
+   * Logs each failure and waits {@link STARTUP_RETRY_DELAY_MS} before retrying.
+   * A replacement session is published by the manager only after initialization
+   * and notification subscription both succeed.
+   */
   private async recoverDeviceConnection(address: string): Promise<boolean> {
     this.logger.warn("Bluetooth connection lost; reconnecting", { address });
 
     while (!this.stopRequested) {
+      // A replacement is published by the manager only after initialization
+      // and notification subscription both succeed.
       try {
         await this.manager.reconnect(address);
         this.logger.info("Bluetooth connection recovered", { address });
@@ -289,6 +351,13 @@ export class DeviceHandler {
     return false;
   }
 
+  /**
+   * Requests cooperative shutdown and wakes any loops currently sleeping.
+   *
+   * @remarks
+   * Sets the stop flag and resolves all pending sleep promises so that
+   * polling loops exit at their next iteration check.
+   */
   stop(): void {
     this.stopRequested = true;
     for (const wake of this.sleepWaiters) {
@@ -297,6 +366,15 @@ export class DeviceHandler {
     this.sleepWaiters.clear();
   }
 
+  /**
+   * Dispatches an external command to the target device's session.
+   *
+   * @param message - Command message from the event bus.
+   *
+   * @remarks
+   * Work is enqueued through {@link enqueueDeviceWork} so it does not overlap
+   * with an in-progress polling cycle for the same device.
+   */
   private async handleCommand(message: CommandMessage<BluettiDevice, DeviceCommand>): Promise<void> {
     const telemetry = this.getTelemetry(message.device.address);
     await this.enqueueDeviceWork(message.device.address, async () => {
@@ -306,6 +384,20 @@ export class DeviceHandler {
     });
   }
 
+  /**
+   * Polls per-battery-pack register windows, switching the active pack first.
+   *
+   * @param address - Bluetooth MAC address of the device.
+   * @param device - Device model with pack polling commands.
+   * @param pollingState - Mutable polling schedule state.
+   * @returns {@link CommandResult} indicating the outcome of the pack scan.
+   *
+   * @remarks
+   * For devices with multiple packs and a writable `pack_num` field, this
+   * method iterates packs 1 through `packNumMax`, writes the pack selector,
+   * waits for the device to settle, then runs the pack polling command set.
+   * If a pack switch fails with an expected error, that pack is skipped.
+   */
   private async runPackCommands(
     address: string,
     device: BluettiDevice,
@@ -342,6 +434,20 @@ export class DeviceHandler {
     return "ok";
   }
 
+  /**
+   * Executes a sequence of read commands with inter-command delays.
+   *
+   * @param address - Bluetooth MAC address of the device.
+   * @param device - Device model for field decoding.
+   * @param commands - Ordered list of read commands to execute.
+   * @param pollingState - Mutable polling schedule state (used for delay).
+   * @returns `"ok"` if all succeeded, `"expected_error"` if a recoverable
+   *   error occurred, or `"busy"`/`"connection_error"` to abort the set.
+   *
+   * @remarks
+   * Stops early on `busy` or `connection_error`. Accumulates `expected_error`
+   * results so the caller knows the set was partially degraded.
+   */
   private async runCommandSet(
     address: string,
     device: BluettiDevice,
@@ -376,6 +482,21 @@ export class DeviceHandler {
     return sawExpectedError ? "expected_error" : "ok";
   }
 
+  /**
+   * Performs one read command, publishes parsed telemetry, and records metrics.
+   *
+   * @param address - Bluetooth MAC address of the device.
+   * @param device - Device model for field decoding.
+   * @param command - Read command to execute.
+   * @returns {@link CommandResult} classifying the outcome.
+   * @throws {Error} For unexpected errors that are not MODBUS/parse/timeout/busy/
+   *   connection errors.
+   *
+   * @remarks
+   * On success, parsed fields are published to the event bus via
+   * {@link EventBus.publishParserMessage}. Command duration is always recorded
+   * in the `finally` block, even when an error is thrown.
+   */
   private async executeReadCommand(
     address: string,
     device: BluettiDevice,
@@ -423,6 +544,20 @@ export class DeviceHandler {
     }
   }
 
+  /**
+   * Writes the `pack_num` setter and waits for the device to settle.
+   *
+   * @param address - Bluetooth MAC address of the device.
+   * @param device - Device model with a writable `pack_num` field.
+   * @param pack - Pack number to select (1-based).
+   * @param pollingState - Mutable polling schedule state (used for delay).
+   * @returns {@link CommandResult} classifying the outcome.
+   * @throws {Error} For unexpected errors.
+   *
+   * @remarks
+   * After writing the setter, waits at least 500 ms (or the current command
+   * delay, whichever is larger) for the device to switch its active pack data.
+   */
   private async trySelectPack(
     address: string,
     device: BluettiDevice,
@@ -455,6 +590,12 @@ export class DeviceHandler {
     }
   }
 
+  /**
+   * Returns the polling state for an address, creating it if absent.
+   *
+   * @param address - Bluetooth MAC address.
+   * @returns The {@link DevicePollingState} for that address.
+   */
   private getPollingState(address: string): DevicePollingState {
     const existing = this.pollingState.get(address);
     if (existing !== undefined) {
@@ -466,6 +607,12 @@ export class DeviceHandler {
     return created;
   }
 
+  /**
+   * Returns the telemetry counters for an address, creating them if absent.
+   *
+   * @param address - Bluetooth MAC address.
+   * @returns The {@link DeviceTelemetry} for that address.
+   */
   private getTelemetry(address: string): DeviceTelemetry {
     const existing = this.telemetry.get(address);
     if (existing !== undefined) {
@@ -477,6 +624,14 @@ export class DeviceHandler {
     return created;
   }
 
+  /**
+   * Emits a telemetry summary log entry at most once per
+   * {@link TELEMETRY_SUMMARY_INTERVAL_MS}.
+   *
+   * @param address - Bluetooth MAC address.
+   * @param state - Current polling schedule state.
+   * @param telemetry - Accumulated telemetry counters.
+   */
   private maybeLogTelemetrySummary(
     address: string,
     state: DevicePollingState,
@@ -497,6 +652,20 @@ export class DeviceHandler {
     });
   }
 
+  /**
+   * Emits a busy-warning log entry at most once per
+   * {@link BUSY_WARNING_INTERVAL_MS}, suppressing duplicates in between.
+   *
+   * @param address - Bluetooth MAC address.
+   * @param state - Current polling schedule state.
+   * @param telemetry - Accumulated telemetry counters.
+   * @param phase - Which polling phase triggered the busy ("polling" or
+   *   "pack polling").
+   *
+   * @remarks
+   * Suppressed warnings are counted and included in the next emitted warning
+   * so the operator can see how many were held back.
+   */
   private maybeLogBusyWarning(
     address: string,
     state: DevicePollingState,
@@ -522,7 +691,21 @@ export class DeviceHandler {
     });
   }
 
+  /**
+   * Serializes async work per address using a promise-chain mutex.
+   *
+   * @param address - Bluetooth MAC address whose work queue to use.
+   * @param work - Async function to execute once it is this address's turn.
+   * @returns The result of `work`.
+   *
+   * @remarks
+   * Promise chaining acts as a per-address mutex without delaying unrelated
+   * devices that have their own queues. The queue entry is cleaned up after
+   * the work completes so stale promises do not accumulate.
+   */
   private async enqueueDeviceWork<T>(address: string, work: () => Promise<T>): Promise<T> {
+    // Promise chaining acts as a per-address mutex without delaying unrelated
+    // devices that have their own queues.
     const previous = this.deviceQueues.get(address) ?? Promise.resolve();
     let release!: () => void;
 
@@ -544,6 +727,17 @@ export class DeviceHandler {
     }
   }
 
+  /**
+   * Sleeps for `ms` milliseconds, interruptible by {@link stop}.
+   *
+   * @param ms - Duration in milliseconds. Returns immediately if `<= 0` or
+   *   stop has been requested.
+   *
+   * @remarks
+   * Registers the waiter in {@link sleepWaiters} so that {@link stop} can
+   * wake all sleeping loops immediately without waiting for their timers.
+   * The waiter is idempotent and cleans up after itself.
+   */
   private async sleep(ms: number): Promise<void> {
     if (this.stopRequested || ms <= 0) {
       return;
@@ -570,107 +764,4 @@ export class DeviceHandler {
       timer = setTimeout(done, ms);
     });
   }
-}
-
-function normalizePollingOptions(intervalMsOrOptions: number | PollingOptions): Required<PollingOptions> {
-  if (typeof intervalMsOrOptions === "number") {
-    if (intervalMsOrOptions <= 0) {
-      return DEFAULT_POLLING_OPTIONS;
-    }
-
-    return {
-      ...DEFAULT_POLLING_OPTIONS,
-      fastIntervalMs: intervalMsOrOptions,
-      fullIntervalMs: Math.max(intervalMsOrOptions * 4, DEFAULT_POLLING_OPTIONS.fullIntervalMs),
-    };
-  }
-
-  return {
-    ...DEFAULT_POLLING_OPTIONS,
-    ...intervalMsOrOptions,
-  };
-}
-
-function createDevicePollingState(options: Required<PollingOptions>): DevicePollingState {
-  return {
-    nextFastPollAt: 0,
-    nextFullPollAt: 0,
-    fastIntervalMs: options.fastIntervalMs,
-    fullIntervalMs: Math.max(options.fullIntervalMs, options.fastIntervalMs),
-    commandDelayMs: options.commandDelayMs,
-  };
-}
-
-function scheduleNextPoll(state: DevicePollingState): void {
-  const nextAt = Date.now();
-  state.nextFastPollAt = nextAt + state.fastIntervalMs;
-  state.nextFullPollAt = nextAt + state.fullIntervalMs;
-}
-
-function createDeviceTelemetry(): DeviceTelemetry {
-  return {
-    cycleCount: 0,
-    fastCycleCount: 0,
-    fullCycleCount: 0,
-    successfulCommandCount: 0,
-    expectedErrorCount: 0,
-    busyErrorCount: 0,
-    commandWriteCount: 0,
-    parserPublishCount: 0,
-    totalCycleDurationMs: 0,
-    totalCommandDurationMs: 0,
-    maxCycleDurationMs: 0,
-    maxCommandDurationMs: 0,
-    lastCycleStartedAt: null,
-    lastCycleCompletedAt: null,
-    lastBusyAt: null,
-    lastErrorAt: null,
-    lastBusyWarningAtMs: 0,
-    suppressedBusyWarningCount: 0,
-    lastSummaryAtMs: 0,
-  };
-}
-
-function formatError(error: Error): string {
-  return error.message || error.name;
-}
-
-function summarizeTelemetry(telemetry: DeviceTelemetry): Record<string, unknown> {
-  const averageCycleDurationMs = telemetry.cycleCount === 0
-    ? 0
-    : Math.round(telemetry.totalCycleDurationMs / telemetry.cycleCount);
-  const averageCommandDurationMs = telemetry.successfulCommandCount === 0
-    ? 0
-    : Math.round(telemetry.totalCommandDurationMs / telemetry.successfulCommandCount);
-
-  return {
-    cycleCount: telemetry.cycleCount,
-    fastCycleCount: telemetry.fastCycleCount,
-    fullCycleCount: telemetry.fullCycleCount,
-    successfulCommandCount: telemetry.successfulCommandCount,
-    expectedErrorCount: telemetry.expectedErrorCount,
-    busyErrorCount: telemetry.busyErrorCount,
-    commandWriteCount: telemetry.commandWriteCount,
-    parserPublishCount: telemetry.parserPublishCount,
-    averageCycleDurationMs,
-    averageCommandDurationMs,
-    maxCycleDurationMs: telemetry.maxCycleDurationMs,
-    maxCommandDurationMs: telemetry.maxCommandDurationMs,
-    lastCycleStartedAt: telemetry.lastCycleStartedAt,
-    lastCycleCompletedAt: telemetry.lastCycleCompletedAt,
-    lastBusyAt: telemetry.lastBusyAt,
-    lastErrorAt: telemetry.lastErrorAt,
-  };
-}
-
-function applyBusyBackoff(state: DevicePollingState, options: Required<PollingOptions>): void {
-  state.fastIntervalMs = Math.min(state.fastIntervalMs + options.busyPenaltyMs, options.maxFastIntervalMs);
-  state.fullIntervalMs = Math.min(state.fullIntervalMs + options.busyPenaltyMs * 2, options.maxFullIntervalMs);
-  state.commandDelayMs = Math.min(state.commandDelayMs + options.recoveryStepMs, options.maxCommandDelayMs);
-}
-
-function recoverPollingState(state: DevicePollingState, options: Required<PollingOptions>): void {
-  state.fastIntervalMs = Math.max(options.fastIntervalMs, state.fastIntervalMs - options.recoveryStepMs);
-  state.fullIntervalMs = Math.max(options.fullIntervalMs, state.fullIntervalMs - options.recoveryStepMs * 2);
-  state.commandDelayMs = Math.max(options.commandDelayMs, state.commandDelayMs - options.recoveryStepMs);
 }

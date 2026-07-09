@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-/** Minimal scan/connect/read diagnostic used to isolate BLE setup failures. */
 import { DeviceSession } from "../bluetooth/device-session.js";
 import { WindowsHelperClient, createWindowsHelperRuntime } from "../bluetooth/helper-client.js";
 import type { BluetoothTransport } from "../bluetooth/transport.js";
@@ -8,12 +7,21 @@ import { ReadHoldingRegisters } from "../core/commands.js";
 import { createDeviceFromAdvertisement } from "../devices/registry.js";
 import { hasHelpFlag, HelpError, optionalSingleAddressArg, runCli } from "./shared.js";
 
+/** CLI usage text printed by `--help` or on argument errors. */
 const HELP_TEXT = `Usage: bluetti-mqtt-node-probe [BLUETOOTH_MAC]
 
 Without an address, scan for nearby devices.
 With an address, connect and run a single register-read probe.
 `;
 
+/**
+ * Scans without an address or performs one minimal register read.
+ *
+ * @remarks
+ * Without an address argument, scans for nearby devices and prints JSON.
+ * With an address, connects, reads the device name, executes
+ * `ReadHoldingRegisters(10, 40)`, and prints the parsed result.
+ */
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   if (hasHelpFlag(argv)) {
@@ -73,6 +81,13 @@ async function main(): Promise<void> {
 
 runCli(main);
 
+/**
+ * JSON.stringify replacer that converts `bigint` values to strings.
+ *
+ * @param _key - Object key (unused).
+ * @param value - Value to convert.
+ * @returns String representation for `bigint`, otherwise the value unchanged.
+ */
 function bigintReplacer(_key: string, value: unknown): unknown {
   return typeof value === "bigint" ? value.toString() : value;
 }

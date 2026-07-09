@@ -1,4 +1,3 @@
-// Covers state publication, command dispatch, and MQTT lifecycle rollback.
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { BasicMqttClient, BluettiMqttBridge } from "../dist/mqtt/client.js";
@@ -7,6 +6,14 @@ import { ReadHoldingRegisters, WriteSingleRegister } from "../dist/core/commands
 import { BluettiDevice } from "../dist/devices/device.js";
 import { DeviceStruct } from "../dist/devices/struct.js";
 
+/**
+ * Smoke-test runner for the MQTT bridge and basic client.
+ *
+ * Covers publishing parsed telemetry to MQTT state topics, dispatching
+ * incoming MQTT commands to the event bus, rejecting unknown devices
+ * or non-writable fields, validation of command payloads, startup
+ * rollback on subscription failure, and async callback error reporting.
+ */
 async function run() {
   await testPublishesStateTopics();
   await testDispatchesIncomingCommand();
@@ -18,6 +25,7 @@ async function run() {
   console.log("mqtt bridge smoke test passed");
 }
 
+/** Parsed telemetry is published to individual MQTT state topics plus a _raw JSON topic. */
 async function testPublishesStateTopics() {
   const bus = new EventBus();
   const mqtt = new FakeRawMqttClient();
@@ -80,6 +88,7 @@ async function testPublishesStateTopics() {
   assert.equal(mqtt.ended, true);
 }
 
+/** Incoming MQTT commands are dispatched as WriteSingleRegister commands on the event bus. */
 async function testDispatchesIncomingCommand() {
   const bus = new EventBus();
   const mqtt = new FakeRawMqttClient();
@@ -122,6 +131,7 @@ async function testDispatchesIncomingCommand() {
   await bridge.stop();
 }
 
+/** Commands referencing an unknown device serial are silently dropped. */
 async function testRejectsUnknownDeviceCommand() {
   const bus = new EventBus();
   const mqtt = new FakeRawMqttClient();
@@ -138,6 +148,7 @@ async function testRejectsUnknownDeviceCommand() {
   await bridge.stop();
 }
 
+/** Commands targeting a field outside the device's writable ranges are silently dropped. */
 async function testRejectsNonWritableFieldCommand() {
   const bus = new EventBus();
   const mqtt = new FakeRawMqttClient();
@@ -159,6 +170,7 @@ async function testRejectsNonWritableFieldCommand() {
   await bridge.stop();
 }
 
+/** Commands with unparseable payloads (non-boolean, non-integer, unknown enum) are silently dropped. */
 async function testRejectsInvalidCommandPayloads() {
   const bus = new EventBus();
   const mqtt = new FakeRawMqttClient();
@@ -182,6 +194,7 @@ async function testRejectsInvalidCommandPayloads() {
   await bridge.stop();
 }
 
+/** If MQTT subscription fails at startup the bridge disconnects and publishes nothing. */
 async function testStartupSubscriptionFailureRollsBackBridge() {
   const bus = new EventBus();
   const mqtt = new FakeRawMqttClient();
@@ -198,6 +211,7 @@ async function testStartupSubscriptionFailureRollsBackBridge() {
   assert.deepEqual(mqtt.published, []);
 }
 
+/** Async callback failures in BasicMqttClient are reported to the configured error handler. */
 async function testBasicClientReportsAsyncCallbackFailures() {
   const rawClient = new FakeBasicRawMqttClient();
   const failures = [];
@@ -216,6 +230,7 @@ async function testBasicClientReportsAsyncCallbackFailures() {
   assert.equal(failures[0].message.topic, "test/topic");
 }
 
+/** Creates a test device with bool, uint, enum, and read-only fields for bridge tests. */
 function createTestDevice() {
   const struct = new DeviceStruct()
     .addBoolField("charge_enabled", 10)
@@ -226,10 +241,12 @@ function createTestDevice() {
   return new TestBluettiDevice("00:11:22:33:44:55", "TEST", "1234567890", struct);
 }
 
+/** Flushes pending microtasks so async callbacks can settle. */
 async function flushAsync() {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/** Minimal BluettiDevice subclass for MQTT bridge testing. */
 class TestBluettiDevice extends BluettiDevice {
   get pollingCommands() {
     return [new ReadHoldingRegisters(10, 3)];
@@ -244,6 +261,7 @@ class TestBluettiDevice extends BluettiDevice {
   }
 }
 
+/** Stub raw MQTT client that records subscriptions and published messages in memory. */
 class FakeRawMqttClient extends EventEmitter {
   subscriptions = [];
   published = [];
@@ -268,11 +286,13 @@ class FakeRawMqttClient extends EventEmitter {
   }
 }
 
+/** Stub raw MQTT client that provides no-op subscribe/publish for BasicMqttClient testing. */
 class FakeBasicRawMqttClient extends EventEmitter {
   async subscribeAsync() {}
   async publishAsync() {}
 }
 
+/** Suppresses all log output during MQTT bridge tests. */
 const silentLogger = {
   debug() {},
   info() {},

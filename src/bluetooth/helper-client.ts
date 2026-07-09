@@ -1,7 +1,3 @@
-/**
- * JSON-lines client and transport adapter for the native Windows GATT helper.
- * The helper process is shared, while each transport owns one helper session.
- */
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
@@ -11,10 +7,9 @@ import { fileURLToPath } from "node:url";
 import type {
   BluetoothDiscovery,
   BluetoothRuntime,
-  BluetoothTransport,
-  BluetoothTransportFactory,
   DiscoveredBluetoothDevice,
 } from "./transport.js";
+import { WindowsHelperTransportFactory } from "./helper-transport.js";
 import type {
   HelperConnectPayload,
   HelperMessage,
@@ -24,8 +19,11 @@ import type {
 } from "./helper-protocol.js";
 import { BadConnectionError } from "./errors.js";
 
+/** Directory of this module (used to resolve package-relative paths). */
 const MODULE_DIRECTORY = dirname(fileURLToPath(import.meta.url));
+/** Package root directory (two levels up from this module). */
 const PACKAGE_ROOT = resolve(MODULE_DIRECTORY, "..", "..");
+/** Path to the published self-contained helper executable. */
 const PUBLISHED_HELPER_PATH = resolve(
   PACKAGE_ROOT,
   "artifacts",
@@ -33,22 +31,68 @@ const PUBLISHED_HELPER_PATH = resolve(
   "win-x64",
   "BluettiMqtt.BluetoothHelper.exe",
 );
+/** Path to the helper .csproj for the `dotnet run` source fallback. */
 const SOURCE_HELPER_PROJECT = resolve(
   PACKAGE_ROOT,
   "helper",
   "BluettiMqtt.BluetoothHelper",
   "BluettiMqtt.BluetoothHelper.csproj",
 );
+/** Default per-request deadline (30 seconds). */
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
+/**
+ * Manages the native Windows helper process and its JSON-lines request protocol.
+ *
+ * @remarks
+ * One client may back several {@link WindowsHelperTransport} instances. Request
+ * IDs isolate command responses, while session IDs route unsolicited
+ * characteristic notifications to the correct transport. Every pending request
+ * has a deadline so a wedged helper cannot stall polling indefinitely.
+ *
+ * The helper communicates over line-delimited JSON on stdio: Node writes
+ * requests to stdin and reads responses/events from stdout. The `ready` event
+ * must arrive before any command is accepted.
+ *
+ * @example
+ * ```ts
+ * const client = new WindowsHelperClient();
+ * await client.waitUntilReady();
+ * const devices = await client.scan();
+ * const runtime = client.createRuntime();
+ * // ... use runtime.transportFactory for device connections ...
+ * client.dispose();
+ * ```
+ *
+ * @see WindowsHelperTransport
+ * @see createWindowsHelperRuntime
+ */
 export class WindowsHelperClient implements BluetoothDiscovery {
+  /** Spawned helper child process. */
   private readonly process: ChildProcessWithoutNullStreams;
+  /** Pending requests awaiting correlated responses, keyed by request ID. */
   private readonly pending = new Map<string, PendingRequest>();
+  /** Process-wide notification listeners fanned out to transports. */
   private readonly notificationListeners = new Set<(event: HelperNotification) => void>();
+  /** Promise that resolves when the helper emits its `ready` event. */
   private readonly ready: Promise<void>;
+  /** Whether the `ready` event has been received. */
   private readyResolved = false;
+  /** Whether {@link dispose} has been called. */
   private disposeRequested = false;
 
+  /**
+   * Spawns the helper process and begins reading its stdout.
+   *
+   * @param command - Helper command as `[executable, ...args]`. Defaults to
+   *   the resolved helper path (published artifact or `dotnet run` fallback).
+   * @param requestTimeoutMs - Default per-request deadline (default 30 s).
+   * @throws {Error} When the command array is empty.
+   *
+   * @remarks
+   * The constructor does not wait for the helper to become ready. Call
+   * {@link WindowsHelperClient.waitUntilReady} before issuing commands.
+   */
   constructor(
     command = resolveDefaultHelperCommand(),
     private readonly requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
@@ -95,14 +139,36 @@ export class WindowsHelperClient implements BluetoothDiscovery {
     });
   }
 
+  /**
+   * Resolves after the helper advertises its `ready` event.
+   *
+   * @returns A promise that rejects if the helper exits or errors before ready.
+   */
   async waitUntilReady(): Promise<void> {
     await this.ready;
   }
 
+  /**
+   * Scans for nearby named Bluetooth advertisements.
+   *
+   * @returns Devices discovered during the scan, filtered to valid entries.
+   *
+   * @see BluetoothDiscovery.discover
+   */
   async discover(): Promise<readonly DiscoveredBluetoothDevice[]> {
     return this.scan();
   }
 
+  /**
+   * Runs a helper scan with a deadline longer than the native scan window.
+   *
+   * @param timeoutMs - Native scan duration in milliseconds (default 5 s).
+   * @returns Valid scan results, filtering out malformed entries.
+   *
+   * @remarks
+   * The request timeout is set to `max(requestTimeoutMs, timeoutMs + 5s)` to
+   * ensure the request does not time out before the scan completes.
+   */
   async scan(timeoutMs = 5_000): Promise<readonly HelperScanDevice[]> {
     const payload = await this.request(
       "scan",
@@ -117,6 +183,13 @@ export class WindowsHelperClient implements BluetoothDiscovery {
     return devices.flatMap((device) => (isHelperScanDevice(device) ? [device] : []));
   }
 
+  /**
+   * Creates one native GATT session for an address.
+   *
+   * @param address - Bluetooth MAC address to connect.
+   * @returns Session identity and device metadata.
+   * @throws {Error} When the helper returns an invalid connect payload.
+   */
   async connect(address: string): Promise<HelperConnectPayload> {
     const payload = await this.request("connect", { address });
     if (!isHelperConnectPayload(payload)) {
@@ -125,10 +198,23 @@ export class WindowsHelperClient implements BluetoothDiscovery {
     return payload;
   }
 
+  /**
+   * Releases one native GATT session.
+   *
+   * @param sessionId - Session ID returned by {@link connect}.
+   */
   async disconnect(sessionId: string): Promise<void> {
     await this.request("disconnect", { sessionId });
   }
 
+  /**
+   * Reads a characteristic through an existing native session.
+   *
+   * @param sessionId - Session ID returned by {@link connect}.
+   * @param uuid - Characteristic UUID to read.
+   * @returns The raw characteristic value bytes.
+   * @throws {Error} When the helper returns an invalid payload.
+   */
   async readCharacteristic(sessionId: string, uuid: string): Promise<Uint8Array> {
     const payload = await this.request("readCharacteristic", { sessionId, uuid });
     const dataBase64 = payload?.dataBase64;
@@ -138,6 +224,14 @@ export class WindowsHelperClient implements BluetoothDiscovery {
     return new Uint8Array(Buffer.from(dataBase64, "base64"));
   }
 
+  /**
+   * Writes characteristic bytes through an existing native session.
+   *
+   * @param sessionId - Session ID returned by {@link connect}.
+   * @param uuid - Characteristic UUID to write.
+   * @param data - Payload bytes to send.
+   * @param withoutResponse - When `true`, uses GATT write-without-response.
+   */
   async writeCharacteristic(
     sessionId: string,
     uuid: string,
@@ -152,10 +246,28 @@ export class WindowsHelperClient implements BluetoothDiscovery {
     });
   }
 
+  /**
+   * Enables native notifications for a characteristic.
+   *
+   * @param sessionId - Session ID returned by {@link connect}.
+   * @param uuid - Characteristic UUID to subscribe to.
+   */
   async subscribe(sessionId: string, uuid: string): Promise<void> {
     await this.request("subscribe", { sessionId, uuid });
   }
 
+  /**
+   * Registers a process-wide notification listener and returns its disposer.
+   *
+   * @param listener - Callback invoked for every notification event from the
+   *   helper. The listener is responsible for filtering by session ID and UUID.
+   * @returns A function that removes the listener when called.
+   *
+   * @remarks
+   * Notification events are not correlated with requests. They fan out to all
+   * listeners; individual {@link WindowsHelperTransport} instances perform
+   * session and UUID filtering.
+   */
   onNotification(listener: (event: HelperNotification) => void): () => void {
     this.notificationListeners.add(listener);
     return () => {
@@ -163,10 +275,24 @@ export class WindowsHelperClient implements BluetoothDiscovery {
     };
   }
 
+  /**
+   * Creates transport and discovery adapters backed by this helper process.
+   *
+   * @returns A {@link BluetoothRuntime} whose factory produces
+   *   {@link WindowsHelperTransport} instances sharing this client.
+   */
   createRuntime(): BluetoothRuntime {
     return createWindowsHelperRuntime(this);
   }
 
+  /**
+   * Rejects pending work, drops listeners, and terminates the helper process.
+   *
+   * @remarks
+   * After disposal, all pending requests are rejected with a disposal error
+   * and no new requests are accepted. The helper process is killed if still
+   * running.
+   */
   dispose(): void {
     this.disposeRequested = true;
     this.rejectPending(new Error("Windows BLE helper disposed"));
@@ -177,6 +303,23 @@ export class WindowsHelperClient implements BluetoothDiscovery {
     }
   }
 
+  /**
+   * Sends a request to the helper and awaits its correlated response.
+   *
+   * @param command - Helper command name.
+   * @param argumentsObject - Optional command arguments.
+   * @param timeoutMs - Per-request deadline (defaults to the client's
+   *   `requestTimeoutMs`).
+   * @returns The response payload, or `undefined` if the payload was empty.
+   * @throws {Error} When the client has been disposed.
+   * @throws {BadConnectionError} When the request times out.
+   * @throws {Error} When the helper returns an error response.
+   *
+   * @remarks
+   * Correlation state is installed **before** the request line is written to
+   * stdin, because a helper response can arrive immediately after stdin
+   * accepts the line.
+   */
   private async request(
     command: string,
     argumentsObject?: Record<string, unknown>,
@@ -194,6 +337,8 @@ export class WindowsHelperClient implements BluetoothDiscovery {
       (request as HelperRequest & { arguments: Record<string, unknown> }).arguments = argumentsObject;
     }
 
+    // Install correlation state before writing: a helper response can arrive
+    // immediately after stdin accepts the line.
     const response = new Promise<Record<string, unknown> | undefined>((resolve, reject) => {
       const timeout = setTimeout(() => {
         if (this.pending.delete(id)) {
@@ -216,6 +361,11 @@ export class WindowsHelperClient implements BluetoothDiscovery {
     return response;
   }
 
+  /**
+   * Rejects all pending requests with the given error and clears the map.
+   *
+   * @param error - Error to reject all pending requests with.
+   */
   private rejectPending(error: unknown): void {
     for (const pending of this.pending.values()) {
       clearTimeout(pending.timeout);
@@ -224,6 +374,18 @@ export class WindowsHelperClient implements BluetoothDiscovery {
     this.pending.clear();
   }
 
+  /**
+   * Parses one stdout line and routes it to the appropriate handler.
+   *
+   * @param line - Raw JSON line from the helper's stdout.
+   * @param onReady - Callback invoked when the `ready` event arrives.
+   * @param onReadyError - Callback invoked when an error arrives before ready.
+   *
+   * @remarks
+   * Events are not correlated with requests. Notifications fan out to
+   * transports, which perform the session and UUID filtering. Response and
+   * error lines are matched to pending requests by ID.
+   */
   private handleLine(line: string, onReady: () => void, onReadyError: (reason?: unknown) => void): void {
     let message: HelperMessage;
     try {
@@ -235,6 +397,8 @@ export class WindowsHelperClient implements BluetoothDiscovery {
       return;
     }
 
+    // Events are not correlated with requests. Notifications fan out to
+    // transports, which perform the session and UUID filtering.
     if (message.type === "event") {
       if (message.name === "ready") {
         this.readyResolved = true;
@@ -277,6 +441,16 @@ export class WindowsHelperClient implements BluetoothDiscovery {
   }
 }
 
+/**
+ * Creates a typed error from a helper error response.
+ *
+ * @param code - Stable machine-readable error code.
+ * @param message - Human-readable error message.
+ * @returns A {@link BadConnectionError} for recoverable connection errors,
+ *   or a generic `Error` for other failures.
+ *
+ * @see isRecoverableBluetoothConnectionError
+ */
 function createHelperError(code: string, message: string): Error {
   const details = `${code}: ${message}`;
   if (isRecoverableBluetoothConnectionError(code, message)) {
@@ -286,6 +460,14 @@ function createHelperError(code: string, message: string): Error {
   return new Error(details);
 }
 
+/**
+ * Returns whether a helper error indicates a recoverable connection problem.
+ *
+ * @param code - Stable error code from the helper.
+ * @param message - Error message text.
+ * @returns `true` when the error is a `command_failed` whose message indicates
+ *   a disposed GATT object or unreachable device.
+ */
 function isRecoverableBluetoothConnectionError(code: string, message: string): boolean {
   if (code !== "command_failed") {
     return false;
@@ -296,6 +478,17 @@ function isRecoverableBluetoothConnectionError(code: string, message: string): b
     || normalizedMessage.includes("unreachable");
 }
 
+/**
+ * Resolves the helper command using environment and artifact precedence.
+ *
+ * @returns Command array in `[executable, ...args]` form.
+ *
+ * @remarks
+ * Resolution order:
+ * 1. `BLUETTI_HELPER_PATH` environment variable
+ * 2. Published helper artifact at `artifacts/helper/win-x64/`
+ * 3. Source fallback via `dotnet run --project helper/...`
+ */
 function resolveDefaultHelperCommand(): readonly string[] {
   const helperOverride = process.env.BLUETTI_HELPER_PATH?.trim();
   if (helperOverride) {
@@ -314,6 +507,19 @@ function resolveDefaultHelperCommand(): readonly string[] {
   ];
 }
 
+/**
+ * Creates the Windows runtime used by CLIs and embedded bridge applications.
+ *
+ * @param client - Helper client to back the runtime. Defaults to a new
+ *   {@link WindowsHelperClient}.
+ * @returns A {@link BluetoothRuntime} with discovery and transport factory.
+ *
+ * @example
+ * ```ts
+ * const runtime = createWindowsHelperRuntime();
+ * const transport = runtime.transportFactory.create();
+ * ```
+ */
 export function createWindowsHelperRuntime(client = new WindowsHelperClient()): BluetoothRuntime {
   return {
     discovery: client,
@@ -321,104 +527,32 @@ export function createWindowsHelperRuntime(client = new WindowsHelperClient()): 
   };
 }
 
-class WindowsHelperTransportFactory implements BluetoothTransportFactory {
-  constructor(private readonly client: WindowsHelperClient) {}
-
-  create(): BluetoothTransport {
-    return new WindowsHelperTransport(this.client);
-  }
-}
-
-class WindowsHelperTransport implements BluetoothTransport {
-  private sessionId: string | null = null;
-  private unsubscribeNotification: (() => void) | null = null;
-  private readonly subscribers = new Map<string, (data: Uint8Array) => void>();
-
-  constructor(private readonly client: WindowsHelperClient) {}
-
-  async connect(address: string): Promise<void> {
-    if (this.sessionId !== null) {
-      throw new Error("Helper transport is already connected");
-    }
-
-    const connection = await this.client.connect(address);
-    this.sessionId = connection.sessionId;
-    try {
-      this.unsubscribeNotification = this.client.onNotification((event) => {
-        if (event.sessionId !== this.sessionId) {
-          return;
-        }
-
-        const callback = this.subscribers.get(normalizeUuid(event.uuid));
-        callback?.(event.data);
-      });
-    } catch (error) {
-      this.sessionId = null;
-      try {
-        await this.client.disconnect(connection.sessionId);
-      } catch {
-        // Preserve the notification wiring failure that made the transport unusable.
-      }
-      throw error;
-    }
-  }
-
-  async disconnect(): Promise<void> {
-    const sessionId = this.sessionId;
-    this.sessionId = null;
-    this.unsubscribeNotification?.();
-    this.unsubscribeNotification = null;
-    this.subscribers.clear();
-
-    if (sessionId !== null) {
-      await this.client.disconnect(sessionId);
-    }
-  }
-
-  async readCharacteristic(uuid: string): Promise<Uint8Array> {
-    return this.client.readCharacteristic(this.requireSessionId(), uuid);
-  }
-
-  async writeCharacteristic(uuid: string, data: Uint8Array): Promise<void> {
-    await this.client.writeCharacteristic(this.requireSessionId(), uuid, data);
-  }
-
-  async subscribe(uuid: string, onData: (data: Uint8Array) => void): Promise<void> {
-    const normalizedUuid = normalizeUuid(uuid);
-    const previous = this.subscribers.get(normalizedUuid);
-    this.subscribers.set(normalizedUuid, onData);
-    try {
-      await this.client.subscribe(this.requireSessionId(), uuid);
-    } catch (error) {
-      if (previous === undefined) {
-        this.subscribers.delete(normalizedUuid);
-      } else {
-        this.subscribers.set(normalizedUuid, previous);
-      }
-      throw error;
-    }
-  }
-
-  private requireSessionId(): string {
-    if (this.sessionId === null) {
-      throw new Error("Helper transport is not connected");
-    }
-    return this.sessionId;
-  }
-}
-
+/** Internal state for one pending helper request. */
 interface PendingRequest {
+  /** Resolves with the response payload. */
   resolve: (value: Record<string, unknown> | undefined) => void;
+  /** Rejects with a timeout or helper error. */
   reject: (reason?: unknown) => void;
+  /** Timeout handle for the request deadline. */
   timeout?: ReturnType<typeof setTimeout>;
 }
 
-interface HelperNotification {
+/** Internal notification event routed to transport subscribers. */
+export interface HelperNotification {
+  /** Helper session ID that owns the subscription. */
   readonly sessionId: string;
+  /** Characteristic UUID that produced the notification. */
   readonly uuid: string;
+  /** Raw notification bytes. */
   readonly data: Uint8Array;
 }
 
+/**
+ * Type guard for {@link HelperScanDevice}.
+ *
+ * @param value - Unknown value from a helper response.
+ * @returns `true` when `value` has string `address` and `name` properties.
+ */
 function isHelperScanDevice(value: unknown): value is HelperScanDevice {
   if (typeof value !== "object" || value === null) {
     return false;
@@ -428,6 +562,12 @@ function isHelperScanDevice(value: unknown): value is HelperScanDevice {
   return typeof candidate.address === "string" && typeof candidate.name === "string";
 }
 
+/**
+ * Type guard for {@link HelperConnectPayload}.
+ *
+ * @param value - Unknown value from a helper response.
+ * @returns `true` when `value` has string `sessionId`, `address`, and `name`.
+ */
 function isHelperConnectPayload(value: unknown): value is HelperConnectPayload {
   if (typeof value !== "object" || value === null) {
     return false;
@@ -439,10 +579,14 @@ function isHelperConnectPayload(value: unknown): value is HelperConnectPayload {
     && typeof candidate.name === "string";
 }
 
+/**
+ * Type guard for {@link HelperNotificationEvent}.
+ *
+ * @param message - Any helper message.
+ * @returns `true` when the message is a notification event.
+ */
 function isHelperNotificationEvent(message: HelperMessage): message is HelperNotificationEvent {
   return message.type === "event" && message.name === "notification";
 }
 
-function normalizeUuid(uuid: string): string {
-  return uuid.toLowerCase();
-}
+
