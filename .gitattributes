@@ -1,0 +1,18 @@
+# Keep formatter-sensitive text files stable on Windows GitHub Actions runners.
+*.ts text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.cs text eol=lf
+*.csproj text eol=lf
+*.sln text eol=lf
+
+# Generated/package artifacts must never be line-ending normalized.
+*.exe binary
+*.dll binary
+*.pdb binary
+*.zip binary
+*.tgz binary
