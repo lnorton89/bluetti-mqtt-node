@@ -28,6 +28,7 @@ export class MockBluetoothTransport implements BluetoothTransport {
   }
 
   async readCharacteristic(uuid: string): Promise<Uint8Array> {
+    this.requireConnected();
     const value = this.characteristics.get(normalizeUuid(uuid));
     if (value === undefined) {
       throw new Error(`No mock characteristic value registered for ${uuid}`);
@@ -36,19 +37,28 @@ export class MockBluetoothTransport implements BluetoothTransport {
   }
 
   async writeCharacteristic(_uuid: string, data: Uint8Array): Promise<void> {
+    this.requireConnected();
     this.writes.push(data.slice());
   }
 
   async subscribe(uuid: string, onData: (data: Uint8Array) => void): Promise<void> {
+    this.requireConnected();
     this.subscribers.set(normalizeUuid(uuid), onData);
   }
 
   emit(uuid: string, data: Uint8Array): void {
+    this.requireConnected();
     const subscriber = this.subscribers.get(normalizeUuid(uuid));
     if (subscriber === undefined) {
       throw new Error(`No mock subscriber registered for ${uuid}`);
     }
     subscriber(data.slice());
+  }
+
+  private requireConnected(): void {
+    if (this.connectedAddress === null) {
+      throw new Error("Mock Bluetooth transport is not connected");
+    }
   }
 }
 

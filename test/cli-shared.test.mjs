@@ -26,6 +26,7 @@ async function run() {
   await testMqttCliInvalidInterval();
   await testMqttCliConfigHelp();
   await testMqttCliInvalidConfigJson();
+  await testMqttCliRejectsInvalidConfigValues();
   console.log("cli shared smoke test passed");
 }
 
@@ -114,6 +115,32 @@ async function testMqttCliInvalidConfigJson() {
     }),
   );
   assert.match(error.stderr, /must be valid JSON/);
+}
+
+async function testMqttCliRejectsInvalidConfigValues() {
+  for (const config of [
+    { interval: -1 },
+    { interval: 3_000_000 },
+    { addresses: "24:4C:AB:2C:24:8E" },
+    { once: "yes" },
+    { logLevel: "verbose" },
+  ]) {
+    const tempDir = await mkdtemp(join(tmpdir(), "bluetti-mqtt-node-"));
+    const configPath = join(tempDir, "bad-config.json");
+    await writeFile(configPath, JSON.stringify(config), "utf8");
+
+    const error = await captureExecError(
+      execFileAsync("node", [
+        ".\\dist\\cli\\bluetti-mqtt.js",
+        "--config",
+        configPath,
+        "--help",
+      ], {
+        cwd: process.cwd(),
+      }),
+    );
+    assert.match(error.stderr, /invalid '.+' value/);
+  }
 }
 
 async function captureExecError(promise) {

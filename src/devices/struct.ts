@@ -163,7 +163,7 @@ export class VersionField extends DeviceField<number> {
   parse(data: Uint8Array): number {
     const low = readUint16BigEndian(data, 0);
     const high = readUint16BigEndian(data, 2);
-    return (low + (high << 16)) / 100;
+    return (low + high * 0x1_0000) / 100;
   }
 }
 
@@ -235,6 +235,10 @@ export class DeviceStruct {
   }
 
   parse(startingAddress: number, data: Uint8Array): ParsedFieldMap {
+    if (data.length % 2 !== 0) {
+      throw new RangeError(`Register data length must be even, got ${data.length}`);
+    }
+
     const registerCount = data.length / 2;
     const registerRangeStart = startingAddress;
     const registerRangeEndExclusive = startingAddress + registerCount;

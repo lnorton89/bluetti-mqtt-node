@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { BluettiMqttBridge } from "../dist/mqtt/client.js";
+import { BasicMqttClient, BluettiMqttBridge } from "../dist/mqtt/client.js";
 import { EventBus } from "../dist/core/event-bus.js";
 import { ReadHoldingRegisters, WriteSingleRegister } from "../dist/core/commands.js";
 import { BluettiDevice } from "../dist/devices/device.js";
@@ -13,6 +13,7 @@ async function run() {
   await testRejectsNonWritableFieldCommand();
   await testRejectsInvalidCommandPayloads();
   await testStartupSubscriptionFailureRollsBackBridge();
+  await testBasicClientReportsAsyncCallbackFailures();
   console.log("mqtt bridge smoke test passed");
 }
 
@@ -196,6 +197,24 @@ async function testStartupSubscriptionFailureRollsBackBridge() {
   assert.deepEqual(mqtt.published, []);
 }
 
+async function testBasicClientReportsAsyncCallbackFailures() {
+  const rawClient = new FakeBasicRawMqttClient();
+  const failures = [];
+  const client = new BasicMqttClient(rawClient, (error, message) => {
+    failures.push({ error, message });
+  });
+  await client.subscribe("test/topic", async () => {
+    throw new Error("callback failed");
+  });
+
+  rawClient.emit("message", "test/topic", Buffer.from("payload"));
+  await flushAsync();
+
+  assert.equal(failures.length, 1);
+  assert.match(String(failures[0].error), /callback failed/);
+  assert.equal(failures[0].message.topic, "test/topic");
+}
+
 function createTestDevice() {
   const struct = new DeviceStruct()
     .addBoolField("charge_enabled", 10)
@@ -246,6 +265,11 @@ class FakeRawMqttClient extends EventEmitter {
   emitMessage(topic, payload) {
     this.emit("message", topic, Buffer.from(payload, "utf8"));
   }
+}
+
+class FakeBasicRawMqttClient extends EventEmitter {
+  async subscribeAsync() {}
+  async publishAsync() {}
 }
 
 const silentLogger = {

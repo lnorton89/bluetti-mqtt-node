@@ -184,13 +184,23 @@ export class BluettiMqttBridge {
 export class BasicMqttClient implements MqttClient {
   private readonly callbacks = new Map<string, (message: ReceivedMqttMessage) => Promise<void> | void>();
 
-  constructor(private readonly rawClient: RawMqttClient) {
+  constructor(
+    private readonly rawClient: RawMqttClient,
+    private readonly onMessageError: (error: unknown, message: ReceivedMqttMessage) => void = () => {},
+  ) {
     this.rawClient.on("message", (topic, payload) => {
       const callback = this.callbacks.get(topic);
       if (!callback) {
         return;
       }
-      void callback({ topic, payload: new Uint8Array(payload) });
+      const message = { topic, payload: new Uint8Array(payload) };
+      try {
+        void Promise.resolve(callback(message)).catch((error: unknown) => {
+          this.onMessageError(error, message);
+        });
+      } catch (error) {
+        this.onMessageError(error, message);
+      }
     });
   }
 

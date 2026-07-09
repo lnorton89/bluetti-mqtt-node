@@ -19,6 +19,7 @@ Options:
   --once                Poll and publish once, then exit
   -h, --help            Show this help text
 `;
+const MAX_TIMER_MS = 2_147_483_647;
 
 async function main(): Promise<void> {
   const args = await parseArgs(process.argv.slice(2));
@@ -75,13 +76,13 @@ async function main(): Promise<void> {
 }
 
 interface CliConfigFile {
-  readonly broker?: string;
-  readonly username?: string;
-  readonly password?: string;
-  readonly interval?: number;
-  readonly once?: boolean;
-  readonly addresses?: readonly string[];
-  readonly logLevel?: LogLevel;
+  broker?: string;
+  username?: string;
+  password?: string;
+  interval?: number;
+  once?: boolean;
+  addresses?: readonly string[];
+  logLevel?: LogLevel;
 }
 
 async function parseArgs(argv: readonly string[]): Promise<{
@@ -151,7 +152,9 @@ async function parseArgs(argv: readonly string[]): Promise<{
     brokerUrl = brokerUrl ?? config.broker;
     username = username ?? config.username;
     password = password ?? config.password;
-    intervalMs = intervalMs > 0 ? intervalMs : (config.interval ?? 0) * 1000;
+    intervalMs = intervalMs > 0
+      ? intervalMs
+      : parseIntervalSeconds(String(config.interval ?? 0), HELP_TEXT);
     runOnce = runOnce || config.once === true;
     logLevel = logLevel !== "info" ? logLevel : (config.logLevel ?? "info");
     if (addresses.length === 0 && config.addresses !== undefined) {
@@ -175,11 +178,19 @@ function requireValue(argv: readonly string[], index: number, helpText: string):
 
 function parseIntervalSeconds(rawValue: string, helpText: string): number {
   const seconds = Number(rawValue);
-  if (!Number.isFinite(seconds) || seconds < 0) {
+  if (!isValidIntervalSeconds(seconds)) {
     throw new UsageError(helpText);
   }
 
   return seconds * 1000;
+}
+
+function isValidIntervalSeconds(seconds: number): boolean {
+  const milliseconds = seconds * 1000;
+  return Number.isFinite(seconds)
+    && seconds >= 0
+    && Number.isSafeInteger(milliseconds)
+    && milliseconds <= MAX_TIMER_MS;
 }
 
 function parseLogLevel(rawValue: string, helpText: string): LogLevel {
@@ -209,5 +220,58 @@ async function readConfigFile(path: string): Promise<CliConfigFile> {
     throw new UsageError(`Config file '${path}' must contain a JSON object.`);
   }
 
-  return parsed as CliConfigFile;
+  const candidate = parsed as Record<string, unknown>;
+  const config: CliConfigFile = {};
+
+  if (candidate.broker !== undefined) {
+    config.broker = requireConfigString(candidate.broker, path, "broker");
+  }
+  if (candidate.username !== undefined) {
+    config.username = requireConfigString(candidate.username, path, "username");
+  }
+  if (candidate.password !== undefined) {
+    config.password = requireConfigString(candidate.password, path, "password");
+  }
+  if (candidate.interval !== undefined) {
+    if (typeof candidate.interval !== "number" || !isValidIntervalSeconds(candidate.interval)) {
+      throw invalidConfigValue(path, "interval");
+    }
+    config.interval = candidate.interval;
+  }
+  if (candidate.once !== undefined) {
+    if (typeof candidate.once !== "boolean") {
+      throw invalidConfigValue(path, "once");
+    }
+    config.once = candidate.once;
+  }
+  if (candidate.addresses !== undefined) {
+    if (!Array.isArray(candidate.addresses) || !candidate.addresses.every((value) => typeof value === "string")) {
+      throw invalidConfigValue(path, "addresses");
+    }
+    config.addresses = candidate.addresses;
+  }
+  if (candidate.logLevel !== undefined) {
+    if (
+      candidate.logLevel !== "debug"
+      && candidate.logLevel !== "info"
+      && candidate.logLevel !== "warn"
+      && candidate.logLevel !== "error"
+    ) {
+      throw invalidConfigValue(path, "logLevel");
+    }
+    config.logLevel = candidate.logLevel;
+  }
+
+  return config;
+}
+
+function requireConfigString(value: unknown, path: string, field: string): string {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw invalidConfigValue(path, field);
+  }
+  return value;
+}
+
+function invalidConfigValue(path: string, field: string): UsageError {
+  return new UsageError(`Config file '${path}' has an invalid '${field}' value.`);
 }

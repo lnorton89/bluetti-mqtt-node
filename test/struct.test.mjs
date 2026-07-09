@@ -10,6 +10,8 @@ async function run() {
   testParsesVersionField();
   testSkipsFieldsOutsideWindow();
   testSkipsOutOfRangeValues();
+  testParsesUnsignedHighVersionWord();
+  testRejectsOddRegisterPayloads();
   console.log("struct smoke test passed");
 }
 
@@ -53,6 +55,17 @@ function testSkipsOutOfRangeValues() {
   const struct = new DeviceStruct().addUintField("battery_percent", 10, [0, 100]);
   const parsed = struct.parse(10, registers([101]));
   assert.deepEqual(parsed, {});
+}
+
+function testParsesUnsignedHighVersionWord() {
+  const struct = new DeviceStruct().addVersionField("arm_version", 10);
+  const parsed = struct.parse(10, registers([0, 0xffff]));
+  assert.equal(parsed.arm_version, (0xffff * 0x1_0000) / 100);
+}
+
+function testRejectsOddRegisterPayloads() {
+  const struct = new DeviceStruct().addUintField("value", 10);
+  assert.throws(() => struct.parse(10, new Uint8Array([0x00])), /length must be even/);
 }
 
 function registers(words) {

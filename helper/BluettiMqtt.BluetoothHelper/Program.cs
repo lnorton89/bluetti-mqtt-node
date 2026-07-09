@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Collections.Concurrent;
 using Windows.Devices.Bluetooth;
 using Windows.Devices.Bluetooth.Advertisement;
 using Windows.Devices.Bluetooth.GenericAttributeProfile;
@@ -223,7 +224,7 @@ internal sealed class HelperProtocol : IAsyncDisposable
 
     private static async Task<IReadOnlyList<ScanDevice>> ScanAsync(int timeoutMs, CancellationToken cancellationToken)
     {
-        var devices = new Dictionary<ulong, ScanDevice>();
+        var devices = new ConcurrentDictionary<ulong, ScanDevice>();
         var watcher = new BluetoothLEAdvertisementWatcher
         {
             ScanningMode = BluetoothLEScanningMode.Active

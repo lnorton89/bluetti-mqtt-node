@@ -321,6 +321,9 @@ export class DeviceHandler {
         if (switched === "busy") {
           return "busy";
         }
+        if (switched === "connection_error") {
+          return "connection_error";
+        }
         if (switched === "expected_error") {
           continue;
         }
