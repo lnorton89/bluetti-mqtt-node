@@ -1,4 +1,4 @@
-// Importing each smoke module executes its self-contained assertions in order.
+/** Sequentially imports and runs all test modules. */
 await import("./device-session.test.mjs");
 await import("./mqtt-client.test.mjs");
 await import("./device-setter.test.mjs");
@@ -8,3 +8,4 @@ await import("./device-handler.test.mjs");
 await import("./helper-client.test.mjs");
 await import("./server.test.mjs");
 await import("./logger.test.mjs");
+await import("./devices.test.mjs");
