@@ -13,6 +13,9 @@ The repository is designed around Windows as the primary runtime. BLE access is 
 - Typed field parsing for supported Bluetti devices
 - MQTT state publishing
 - MQTT command-topic ingestion for writable fields
+- Optional MQTT TLS support for CA trust, mutual TLS, server name override, and
+  self-signed broker workflows
+- `c8` coverage reporting and a single `npm run validate` CI contract
 - Live polling, logging, and probe CLIs
 
 ## Scope
@@ -20,7 +23,7 @@ The repository is designed around Windows as the primary runtime. BLE access is 
 Included:
 
 - Windows runtime
-- MQTT bridge
+- MQTT broker bridge over plain MQTT or TLS-secured MQTT
 - BLE polling and command dispatch
 
 Explicitly out of scope:
@@ -73,12 +76,32 @@ That gives us:
 
 The helper communicates with Node over line-delimited JSON on stdio.
 
+## Quick Start
+
+For local development with a reachable broker and a known Bluetti BLE address:
+
+```powershell
+npm ci
+npm run build
+npm run helper:build
+npm run bluetti-mqtt -- --broker mqtt://127.0.0.1:1883 --once 24:4C:AB:2C:24:8E
+```
+
+For a packaged/runtime-style setup, publish the helper first so the CLI can
+resolve `artifacts/helper/win-x64/BluettiMqtt.BluetoothHelper.exe` without
+falling back to `dotnet run`:
+
+```powershell
+npm run helper:publish
+npm run bluetti-mqtt -- --broker mqtt://127.0.0.1:1883 --interval 5 24:4C:AB:2C:24:8E
+```
+
 ## Requirements
 
 Runtime requirements:
 
 - Windows
-- Node.js 22+ recommended
+- Node.js 22 or newer
 - npm
 - .NET SDK 6.0+ if you are building the Windows helper from source
 - Bluetooth adapter supported by Windows BLE APIs
@@ -93,7 +116,7 @@ Development requirements:
 Install Node dependencies:
 
 ```powershell
-npm install
+npm ci
 ```
 
 Build the TypeScript project:
@@ -125,6 +148,10 @@ Run the full local validation suite:
 ```powershell
 npm run validate
 ```
+
+`npm run validate` is the same command used by CI. It runs TypeScript
+typechecking, Biome linting, the test suite, `c8` coverage, and the Windows
+helper build.
 
 ## Installed CLI Names
 
@@ -225,6 +252,11 @@ Supported flags:
 - `--config <path>`
 - `--username <username>`
 - `--password <password>`
+- `--mqtt-ca <path>`
+- `--mqtt-cert <path>`
+- `--mqtt-key <path>`
+- `--mqtt-servername <name>`
+- `--mqtt-insecure`
 - `--interval <seconds>`
 - `--log-level <level>`
 - `--once`
@@ -246,12 +278,62 @@ The config file is JSON and supports:
 - `broker`
 - `username`
 - `password`
+- `tls.caPath`
+- `tls.certPath`
+- `tls.keyPath`
+- `tls.servername`
+- `tls.rejectUnauthorized`
 - `interval`
 - `once`
 - `logLevel`
 - `addresses`
 
 CLI flags override config-file values when both are provided.
+
+### MQTT TLS
+
+Use an `mqtts://` broker URL with TLS options when the broker requires a custom
+trust chain, client certificate authentication, or a specific TLS server name.
+
+CA-only example:
+
+```powershell
+npm run bluetti-mqtt -- `
+  --broker mqtts://broker.local:8883 `
+  --mqtt-ca .\certs\ca.pem `
+  --interval 5 `
+  24:4C:AB:2C:24:8E
+```
+
+Mutual TLS example:
+
+```powershell
+npm run bluetti-mqtt -- `
+  --broker mqtts://broker.local:8883 `
+  --mqtt-ca .\certs\ca.pem `
+  --mqtt-cert .\certs\client.pem `
+  --mqtt-key .\certs\client-key.pem `
+  24:4C:AB:2C:24:8E
+```
+
+For local labs with self-signed certificates, `--mqtt-insecure` sets
+`rejectUnauthorized` to `false`. Prefer a CA file for normal use.
+
+Config-file TLS fields live under `tls`:
+
+```json
+{
+  "broker": "mqtts://broker.local:8883",
+  "tls": {
+    "caPath": "./certs/ca.pem",
+    "certPath": "./certs/client.pem",
+    "keyPath": "./certs/client-key.pem",
+    "servername": "broker.local",
+    "rejectUnauthorized": true
+  },
+  "addresses": ["24:4C:AB:2C:24:8E"]
+}
+```
 
 ## MQTT Topic Layout
 
@@ -313,7 +395,9 @@ Useful commands:
 
 ```powershell
 npm run typecheck
+npm run lint
 npm test
+npm run coverage
 npm run build
 npm run helper:publish
 npm run helper:publish:portable
@@ -324,9 +408,12 @@ dotnet build helper\BluettiMqtt.BluetoothHelper\BluettiMqtt.BluetoothHelper.cspr
 
 GitHub Actions validates:
 
-- `npm run typecheck`
-- `npm test`
-- `npm run helper:build`
+- `npm run validate` on Node.js 22.x, 24.x, and 26.x
+
+Additional development docs:
+
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [CHANGELOG.md](CHANGELOG.md)
 
 ## Distribution Notes
 
