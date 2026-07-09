@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
+import { BasicMqttClient, BluettiMqttBridge } from "../dist/broker/client.js";
+import { buildMqttConnectionOptions } from "../dist/broker/connection-options.js";
 import {
 	ReadHoldingRegisters,
 	WriteSingleRegister,
@@ -7,8 +9,6 @@ import {
 import { EventBus } from "../dist/core/event-bus.js";
 import { BluettiDevice } from "../dist/devices/device.js";
 import { DeviceStruct } from "../dist/devices/struct.js";
-import { buildMqttConnectionOptions } from "../dist/broker/connection-options.js";
-import { BasicMqttClient, BluettiMqttBridge } from "../dist/broker/client.js";
 
 /**
  * Smoke-test runner for the MQTT bridge and basic client.

@@ -5,14 +5,13 @@ import {
 	WindowsHelperClient,
 } from "@bluetooth/helper-client.js";
 import {
-	HelpError,
 	hasHelpFlag,
 	normalizeValue,
 	optionalSingleAddressArg,
-	runCli,
-	runPollingCommands,
-	withConnectedDevice,
-} from "./shared.js";
+} from "./args.js";
+import { HelpError } from "./errors.js";
+import { runCli } from "./process.js";
+import { runPollingCommands, withConnectedDevice } from "./shared.js";
 
 /** CLI usage text printed by `--help` or on argument errors. */
 const HELP_TEXT = `Usage: bluetti-mqtt-node-poll [BLUETOOTH_MAC]

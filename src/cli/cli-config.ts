@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import type { LogLevel } from "@core/logger.js";
-import { UsageError } from "./shared.js";
+import { UsageError } from "./errors.js";
 
 /** Maximum safe `setTimeout` delay in milliseconds (32-bit signed int limit). */
 const MAX_TIMER_MS = 2_147_483_647;

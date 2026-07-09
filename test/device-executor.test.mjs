@@ -120,7 +120,9 @@ async function testRunPackCommandsSelectsPacksBeforeReading() {
 	assert.equal(result, "ok");
 	assert.deepEqual(
 		session.performed.map((command) =>
-			command.functionCode === 6 ? ["write", command.address, command.value] : ["read", command.startingAddress],
+			command.functionCode === 6
+				? ["write", command.address, command.value]
+				: ["read", command.startingAddress],
 		),
 		[
 			["write", 3006, 1],
@@ -148,7 +150,9 @@ async function testRunPackCommandsSkipsPackAfterExpectedSelectionError() {
 	assert.equal(result, "ok");
 	assert.deepEqual(
 		session.performed.map((command) =>
-			command.functionCode === 6 ? ["write", command.value] : ["read", command.startingAddress],
+			command.functionCode === 6
+				? ["write", command.value]
+				: ["read", command.startingAddress],
 		),
 		[
 			["write", 1],
@@ -238,7 +242,11 @@ function readResponse(registerBytes) {
 class FakeSession {
 	performed = [];
 
-	constructor({ error = null, readResponses = new Map(), writeErrors = [] } = {}) {
+	constructor({
+		error = null,
+		readResponses = new Map(),
+		writeErrors = [],
+	} = {}) {
 		this.error = error;
 		this.readResponses = readResponses;
 		this.writeErrors = writeErrors;

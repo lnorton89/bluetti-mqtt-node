@@ -4,7 +4,9 @@ import {
 	createWindowsHelperRuntime,
 	WindowsHelperClient,
 } from "@bluetooth/helper-client.js";
-import { HelpError, hasHelpFlag, runCli } from "./shared.js";
+import { hasHelpFlag } from "./args.js";
+import { HelpError } from "./errors.js";
+import { runCli } from "./process.js";
 
 /** CLI usage text printed by `--help`. */
 const HELP_TEXT = `Usage: bluetti-mqtt-node-discovery

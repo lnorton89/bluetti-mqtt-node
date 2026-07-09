@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { sendHelperRequest } from "../dist/bluetooth/helper-request.js";
 import { BadConnectionError } from "../dist/bluetooth/errors.js";
+import { sendHelperRequest } from "../dist/bluetooth/helper-request.js";
 
 async function run() {
 	await testSendsJsonLineAndResolvesCorrelatedResponse();

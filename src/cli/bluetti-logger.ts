@@ -1,12 +1,8 @@
 #!/usr/bin/env node
 
-import {
-	normalizeValue,
-	requireSingleAddressArg,
-	runCli,
-	runPollingCommands,
-	withConnectedDevice,
-} from "./shared.js";
+import { normalizeValue, requireSingleAddressArg } from "./args.js";
+import { runCli } from "./process.js";
+import { runPollingCommands, withConnectedDevice } from "./shared.js";
 
 /** CLI usage text printed by `--help` or on argument errors. */
 const HELP_TEXT = `Usage: bluetti-mqtt-node-logger <BLUETOOTH_MAC>

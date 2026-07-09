@@ -206,8 +206,14 @@ function makeClientHarness() {
 /** Public helper methods translate request payloads and reject malformed helper responses. */
 async function testPublicRequestMethodsValidatePayloads() {
 	const client = makeRequestHarness({
-		connect: { sessionId: "session-1", address: "00:11:22:33:44:55", name: "AC500123" },
-		readCharacteristic: { dataBase64: Buffer.from([4, 5, 6]).toString("base64") },
+		connect: {
+			sessionId: "session-1",
+			address: "00:11:22:33:44:55",
+			name: "AC500123",
+		},
+		readCharacteristic: {
+			dataBase64: Buffer.from([4, 5, 6]).toString("base64"),
+		},
 	});
 
 	assert.deepEqual(await client.connect("00:11:22:33:44:55"), {
@@ -219,13 +225,22 @@ async function testPublicRequestMethodsValidatePayloads() {
 		await client.readCharacteristic("session-1", "read-uuid"),
 		new Uint8Array([4, 5, 6]),
 	);
-	await client.writeCharacteristic("session-1", "write-uuid", new Uint8Array([1, 2]), false);
+	await client.writeCharacteristic(
+		"session-1",
+		"write-uuid",
+		new Uint8Array([1, 2]),
+		false,
+	);
 	await client.subscribe("session-1", "notify-uuid");
 	await client.disconnect("session-1");
 
 	assert.deepEqual(client.calls, [
 		["connect", { address: "00:11:22:33:44:55" }, undefined],
-		["readCharacteristic", { sessionId: "session-1", uuid: "read-uuid" }, undefined],
+		[
+			"readCharacteristic",
+			{ sessionId: "session-1", uuid: "read-uuid" },
+			undefined,
+		],
 		[
 			"writeCharacteristic",
 			{
@@ -241,11 +256,16 @@ async function testPublicRequestMethodsValidatePayloads() {
 	]);
 
 	await assert.rejects(
-		makeRequestHarness({ connect: { sessionId: "session-1" } }).connect("address"),
+		makeRequestHarness({ connect: { sessionId: "session-1" } }).connect(
+			"address",
+		),
 		/invalid connect payload/,
 	);
 	await assert.rejects(
-		makeRequestHarness({ readCharacteristic: {} }).readCharacteristic("session-1", "uuid"),
+		makeRequestHarness({ readCharacteristic: {} }).readCharacteristic(
+			"session-1",
+			"uuid",
+		),
 		/invalid readCharacteristic payload/,
 	);
 }

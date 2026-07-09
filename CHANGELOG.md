@@ -6,6 +6,51 @@ This project follows a pragmatic changelog format inspired by Keep a Changelog.
 Use the `Unreleased` section for work that has landed on `main` but has not
 been released.
 
+## 1.0.1
+
+### Refactored
+
+- **cli:** split `src/cli/shared.ts` (362 lines) into `errors.ts`
+  (`UsageError`, `HelpError`), `args.ts` (`hasHelpFlag`, single/optional
+  address arg, `validateBluetoothAddress`, `normalizeValue`), `process.ts`
+  (`runCli`, `installSignalHandlers`), plus the `withConnectedDevice` and
+  `runPollingCommands` residue. Six sibling CLI entry files and
+  `test/cli-shared.test.mjs` updated to the new import paths.
+- **broker:** extracted six standalone payload helpers (`serializeValue`,
+  `parseCommandValue`, `normalizeRecord`, `normalizeValue`, `deviceKey`,
+  `stringifyError`) from `src/broker/client.ts` into a new
+  `src/broker/payload-utils.ts`. The bridge class and supporting interfaces
+  (`BluettiMqttClientOptions`, `MqttTlsOptions`, `RawMqttClientLike`,
+  `MqttConnector`, `PollingCommand` type alias) stay in `client.ts`. Added a
+  cross-reference comment on the broker `normalizeValue` highlighting its
+  intentional divergence from the CLI sibling in `@cli/args.ts`.
+- **bluetooth:** extracted four helpers (`isRetryableInitializationError`,
+  `sleep`, `concatBytes`, `isAsciiControlMessage`) from
+  `src/bluetooth/device-session.ts` into a new
+  `src/bluetooth/session-utils.ts`, along with the five bluetooth constants
+  those helpers reference (`GATT_UNREACHABLE_TEXT`,
+  `GATT_FAILED_UNREACHABLE_TEXT`, `UNREACHABLE_ERROR_TEXT`,
+  `AT_CONTROL_NAME_MESSAGE`, `AT_CONTROL_ADV_MESSAGE`). The `DeviceSession`
+  class and `DeviceSessionState` enum stay in `device-session.ts` so the
+  public surface is unchanged.
+- **app:** `src/app/device-handler.ts` was reviewed for a parallel split
+  but **left as-is**. The residue is tightly-coupled orchestrator glue
+  whose `run()` body interleaves five instance fields; the previous
+  extractions (`device-connection.ts`, `device-executor.ts`,
+  `device-queue.ts`, `polling-state.ts`) already captured every cohesive
+  concern with closed state. Three plausible splits were considered and
+  rejected as net-negative clarity; the deferral is recorded in the commit
+  log for traceability.
+
+### Tooling
+
+- Biome auto-fixup folded in for the four test files affected by the import
+  rewrites (`broker-client.test.mjs`, `device-executor.test.mjs`,
+  `helper-client.test.mjs`, `helper-request.test.mjs`).
+
+No runtime behavior changes. No public API changes. No new tests; existing
+tests are unchanged in outcome.
+
 ## 1.0.0
 
 ### Added

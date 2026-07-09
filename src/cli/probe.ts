@@ -8,12 +8,9 @@ import {
 import type { BluetoothTransport } from "@bluetooth/transport.js";
 import { ReadHoldingRegisters } from "@core/commands.js";
 import { createDeviceFromAdvertisement } from "@devices/registry.js";
-import {
-	HelpError,
-	hasHelpFlag,
-	optionalSingleAddressArg,
-	runCli,
-} from "./shared.js";
+import { hasHelpFlag, optionalSingleAddressArg } from "./args.js";
+import { HelpError } from "./errors.js";
+import { runCli } from "./process.js";
 
 /** CLI usage text printed by `--help` or on argument errors. */
 const HELP_TEXT = `Usage: bluetti-mqtt-node-probe [BLUETOOTH_MAC]

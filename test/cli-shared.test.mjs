@@ -5,12 +5,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import {
-	HelpError,
 	optionalSingleAddressArg,
 	requireSingleAddressArg,
-	UsageError,
 	validateBluetoothAddress,
-} from "../dist/cli/shared.js";
+} from "../dist/cli/args.js";
+import { HelpError, UsageError } from "../dist/cli/errors.js";
 
 const execFileAsync = promisify(execFile);
 

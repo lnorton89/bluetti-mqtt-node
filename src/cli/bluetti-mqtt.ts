@@ -7,6 +7,7 @@ import {
 } from "@bluetooth/helper-client.js";
 import type { MqttTlsOptions } from "@broker/client.js";
 import { ConsoleLogger, type LogLevel } from "@core/logger.js";
+import { validateBluetoothAddress } from "./args.js";
 import {
 	parseIntervalSeconds,
 	parseLogLevel,
@@ -14,13 +15,8 @@ import {
 	readTlsFile,
 	requireValue,
 } from "./cli-config.js";
-import {
-	HelpError,
-	installSignalHandlers,
-	runCli,
-	UsageError,
-	validateBluetoothAddress,
-} from "./shared.js";
+import { HelpError, UsageError } from "./errors.js";
+import { installSignalHandlers, runCli } from "./process.js";
 
 /** CLI usage text printed by `--help` or on argument errors. */
 const HELP_TEXT = `Usage: bluetti-mqtt-node --broker <mqtt-url> [options] <BLUETOOTH_MAC...>
