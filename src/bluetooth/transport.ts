@@ -102,14 +102,16 @@ export interface BluetoothDiscovery {
  *
  * @remarks
  * Bundles the transport factory and discovery adapter for a specific platform
- * (e.g. the Windows helper). The CLI and server consume this to obtain BLE
- * access without depending on platform internals.
+ * (e.g. the Windows helper or BlueZ D-Bus). The CLI and server consume this
+ * to obtain BLE access without depending on platform internals.
  *
- * @see createWindowsHelperRuntime
+ * @see createRuntime
  */
 export interface BluetoothRuntime {
 	/** Transport factory for creating per-device GATT connections. */
 	readonly transportFactory: BluetoothTransportFactory;
 	/** Optional discovery adapter for scanning nearby devices. */
 	readonly discovery?: BluetoothDiscovery;
+	/** Releases platform resources (helper process, D-Bus connection, etc.). */
+	readonly dispose?: () => void;
 }

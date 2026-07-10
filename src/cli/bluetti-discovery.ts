@@ -1,9 +1,6 @@
 #!/usr/bin/env node
 
-import {
-	createWindowsHelperRuntime,
-	WindowsHelperClient,
-} from "@bluetooth/helper-client.js";
+import { createRuntime } from "@bluetooth/runtime.js";
 import { hasHelpFlag } from "./args.js";
 import { HelpError } from "./errors.js";
 import { runCli } from "./process.js";
@@ -15,24 +12,23 @@ Scan for nearby Bluetti BLE devices and print them as JSON.
 `;
 
 /**
- * Owns the helper for one discovery operation.
+ * Scans for nearby BLE devices and prints them as JSON.
  *
  * @remarks
- * Creates a {@link WindowsHelperClient}, scans for nearby BLE devices, prints
- * them as JSON, and disposes the helper.
+ * Creates a platform-appropriate runtime, scans for nearby BLE devices,
+ * prints them as JSON, and disposes the runtime.
  */
 async function main(): Promise<void> {
 	if (hasHelpFlag(process.argv.slice(2))) {
 		throw new HelpError(HELP_TEXT);
 	}
 
-	const client = new WindowsHelperClient();
+	const runtime = await createRuntime();
 	try {
-		const runtime = createWindowsHelperRuntime(client);
 		const devices = await runtime.discovery?.discover();
 		console.log(JSON.stringify(devices ?? [], null, 2));
 	} finally {
-		client.dispose();
+		runtime.dispose?.();
 	}
 }
 

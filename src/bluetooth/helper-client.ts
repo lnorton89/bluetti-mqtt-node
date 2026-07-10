@@ -450,6 +450,7 @@ export function createWindowsHelperRuntime(
 	return {
 		discovery: client,
 		transportFactory: new WindowsHelperTransportFactory(client),
+		dispose: () => client.dispose(),
 	};
 }
 

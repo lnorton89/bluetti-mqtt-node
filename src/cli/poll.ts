@@ -1,9 +1,6 @@
 #!/usr/bin/env node
 
-import {
-	createWindowsHelperRuntime,
-	WindowsHelperClient,
-} from "@bluetooth/helper-client.js";
+import { createRuntime } from "@bluetooth/runtime.js";
 import {
 	hasHelpFlag,
 	normalizeValue,
@@ -36,14 +33,13 @@ async function main(): Promise<void> {
 
 	const address = optionalSingleAddressArg(argv, HELP_TEXT);
 	if (!address) {
-		const client = new WindowsHelperClient();
+		const runtime = await createRuntime();
 		try {
-			const runtime = createWindowsHelperRuntime(client);
 			const devices = await runtime.discovery?.discover();
 			console.log(JSON.stringify(devices ?? [], null, 2));
 			return;
 		} finally {
-			client.dispose();
+			runtime.dispose?.();
 		}
 	}
 

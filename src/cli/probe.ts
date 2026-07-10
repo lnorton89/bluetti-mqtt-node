@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
 import { DeviceSession } from "@bluetooth/device-session.js";
-import {
-	createWindowsHelperRuntime,
-	WindowsHelperClient,
-} from "@bluetooth/helper-client.js";
-import type { BluetoothTransport } from "@bluetooth/transport.js";
+import { createRuntime } from "@bluetooth/runtime.js";
+import type {
+	BluetoothRuntime,
+	BluetoothTransport,
+} from "@bluetooth/transport.js";
 import { ReadHoldingRegisters } from "@core/commands.js";
 import { createDeviceFromAdvertisement } from "@devices/registry.js";
 import { hasHelpFlag, optionalSingleAddressArg } from "./args.js";
@@ -35,10 +35,13 @@ async function main(): Promise<void> {
 
 	const address = optionalSingleAddressArg(argv, HELP_TEXT);
 
-	const client = new WindowsHelperClient();
+	const runtime = await createRuntime();
 	let transport: BluetoothTransport | null = null;
 	let cleanupComplete = false;
-	const cleanup = async (reportDisconnectError: boolean): Promise<void> => {
+	const cleanup = async (
+		runtimeRef: BluetoothRuntime,
+		reportDisconnectError: boolean,
+	): Promise<void> => {
 		if (cleanupComplete) {
 			return;
 		}
@@ -53,15 +56,14 @@ async function main(): Promise<void> {
 				}
 			}
 		}
-		client.dispose();
+		runtimeRef.dispose?.();
 	};
 
 	try {
-		const runtime = createWindowsHelperRuntime(client);
 		if (!address) {
 			const devices = await runtime.discovery?.discover();
 			console.log(JSON.stringify(devices ?? [], null, 2));
-			await cleanup(true);
+			await cleanup(runtime, true);
 			return;
 		}
 
@@ -85,9 +87,9 @@ async function main(): Promise<void> {
 			command.parseResponse(response),
 		);
 		console.log(JSON.stringify(parsed, bigintReplacer, 2));
-		await cleanup(true);
+		await cleanup(runtime, true);
 	} catch (error) {
-		await cleanup(false);
+		await cleanup(runtime, false);
 		throw error;
 	}
 }

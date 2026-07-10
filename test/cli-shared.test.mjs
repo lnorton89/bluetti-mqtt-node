@@ -80,7 +80,7 @@ function testOptionalSingleAddressArg() {
 async function testMqttCliHelp() {
 	const result = await execFileAsync(
 		"node",
-		[".\\dist\\cli\\bluetti-mqtt.js", "--help"],
+		["./dist/cli/bluetti-mqtt.js", "--help"],
 		{
 			cwd: process.cwd(),
 		},
@@ -93,7 +93,7 @@ async function testMqttCliMissingBroker() {
 	const error = await captureExecError(
 		execFileAsync(
 			"node",
-			[".\\dist\\cli\\bluetti-mqtt.js", "24:4C:AB:2C:24:8E"],
+			["./dist/cli/bluetti-mqtt.js", "24:4C:AB:2C:24:8E"],
 			{
 				cwd: process.cwd(),
 			},
@@ -108,7 +108,7 @@ async function testMqttCliInvalidInterval() {
 		execFileAsync(
 			"node",
 			[
-				".\\dist\\cli\\bluetti-mqtt.js",
+				"./dist/cli/bluetti-mqtt.js",
 				"--broker",
 				"mqtt://127.0.0.1:1883",
 				"--interval",
@@ -128,9 +128,9 @@ async function testMqttCliConfigHelp() {
 	const result = await execFileAsync(
 		"node",
 		[
-			".\\dist\\cli\\bluetti-mqtt.js",
+			"./dist/cli/bluetti-mqtt.js",
 			"--config",
-			".\\config.example.json",
+			"./config.example.json",
 			"--help",
 		],
 		{
@@ -149,7 +149,7 @@ async function testMqttCliInvalidConfigJson() {
 	const error = await captureExecError(
 		execFileAsync(
 			"node",
-			[".\\dist\\cli\\bluetti-mqtt.js", "--config", configPath, "--help"],
+			["./dist/cli/bluetti-mqtt.js", "--config", configPath, "--help"],
 			{
 				cwd: process.cwd(),
 			},
@@ -185,7 +185,7 @@ async function testMqttCliConfigTlsFiles() {
 
 	const result = await execFileAsync(
 		"node",
-		[".\\dist\\cli\\bluetti-mqtt.js", "--config", configPath, "--help"],
+		["./dist/cli/bluetti-mqtt.js", "--config", configPath, "--help"],
 		{
 			cwd: process.cwd(),
 		},
@@ -205,7 +205,7 @@ async function testMqttCliConfigTlsFiles() {
 		execFileAsync(
 			"node",
 			[
-				".\\dist\\cli\\bluetti-mqtt.js",
+				"./dist/cli/bluetti-mqtt.js",
 				"--config",
 				missingConfigPath,
 				"--help",
@@ -237,7 +237,7 @@ async function testMqttCliRejectsInvalidConfigValues() {
 		const error = await captureExecError(
 			execFileAsync(
 				"node",
-				[".\\dist\\cli\\bluetti-mqtt.js", "--config", configPath, "--help"],
+				["./dist/cli/bluetti-mqtt.js", "--config", configPath, "--help"],
 				{
 					cwd: process.cwd(),
 				},

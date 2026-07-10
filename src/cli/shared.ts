@@ -1,9 +1,9 @@
 import { DeviceSession } from "@bluetooth/device-session.js";
-import {
-	createWindowsHelperRuntime,
-	WindowsHelperClient,
-} from "@bluetooth/helper-client.js";
-import type { BluetoothTransport } from "@bluetooth/transport.js";
+import { createRuntime } from "@bluetooth/runtime.js";
+import type {
+	BluetoothRuntime,
+	BluetoothTransport,
+} from "@bluetooth/transport.js";
 import type { ReadHoldingRegisters } from "@core/commands.js";
 import type { BluettiDevice } from "@devices/device.js";
 import { createDeviceFromAdvertisement } from "@devices/registry.js";
@@ -19,7 +19,7 @@ import { createDeviceFromAdvertisement } from "@devices/registry.js";
  * @remarks
  * The original operation error takes precedence over a secondary disconnect
  * failure; successful work still reports disconnect failures to the caller.
- * The helper client is always disposed during cleanup.
+ * The runtime is always disposed during cleanup.
  *
  * @see ConnectedDeviceContext
  */
@@ -27,10 +27,13 @@ export async function withConnectedDevice<T>(
 	address: string,
 	work: (context: ConnectedDeviceContext) => Promise<T>,
 ): Promise<T> {
-	const client = new WindowsHelperClient();
+	const runtime = await createRuntime();
 	let transport: BluetoothTransport | null = null;
 	let cleanupComplete = false;
-	const cleanup = async (reportDisconnectError: boolean): Promise<void> => {
+	const cleanup = async (
+		runtimeRef: BluetoothRuntime,
+		reportDisconnectError: boolean,
+	): Promise<void> => {
 		if (cleanupComplete) {
 			return;
 		}
@@ -45,11 +48,10 @@ export async function withConnectedDevice<T>(
 				}
 			}
 		}
-		client.dispose();
+		runtimeRef.dispose?.();
 	};
 
 	try {
-		const runtime = createWindowsHelperRuntime(client);
 		transport = runtime.transportFactory.create();
 		const session = new DeviceSession(address, transport);
 		await session.connectAndInitialize();
@@ -60,10 +62,10 @@ export async function withConnectedDevice<T>(
 
 		const device = createDeviceFromAdvertisement(address, session.name);
 		const result = await work({ address, session, device });
-		await cleanup(true);
+		await cleanup(runtime, true);
 		return result;
 	} catch (error) {
-		await cleanup(false);
+		await cleanup(runtime, false);
 		throw error;
 	}
 }

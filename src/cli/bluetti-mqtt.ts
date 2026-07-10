@@ -1,10 +1,7 @@
 #!/usr/bin/env node
 
 import { BluettiMqttServer } from "@app/server.js";
-import {
-	createWindowsHelperRuntime,
-	WindowsHelperClient,
-} from "@bluetooth/helper-client.js";
+import { createRuntime } from "@bluetooth/runtime.js";
 import type { MqttTlsOptions } from "@broker/client.js";
 import { ConsoleLogger, type LogLevel } from "@core/logger.js";
 import { validateBluetoothAddress } from "./args.js";
@@ -58,10 +55,9 @@ async function main(): Promise<void> {
 	}
 
 	const logger = new ConsoleLogger(args.logLevel);
-	const helper = new WindowsHelperClient();
+	const runtime = await createRuntime();
 	let removeSignalHandlers: (() => void) | undefined;
 	try {
-		const runtime = createWindowsHelperRuntime(helper);
 		const mqttOptions: {
 			url: string;
 			username?: string;
@@ -101,7 +97,7 @@ async function main(): Promise<void> {
 		await server.run();
 	} finally {
 		removeSignalHandlers?.();
-		helper.dispose();
+		runtime.dispose?.();
 	}
 }
 
