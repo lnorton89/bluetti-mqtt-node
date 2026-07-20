@@ -6,6 +6,13 @@ This project follows a pragmatic changelog format inspired by Keep a Changelog.
 Use the `Unreleased` section for work that has landed on `main` but has not
 been released.
 
+## Unreleased
+
+### Fixed
+
+- Battery-pack-only busy responses now back off slow/full polling without
+  stretching the independent fast power/state telemetry interval.
+
 ## 1.0.1
 
 ### Refactored

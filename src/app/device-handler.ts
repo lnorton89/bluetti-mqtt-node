@@ -12,6 +12,7 @@ import { DeviceCommandRunner } from "./device-executor.js";
 import { DeviceWorkQueue } from "./device-queue.js";
 import {
 	applyBusyBackoff,
+	applyPackBusyBackoff,
 	BUSY_WARNING_INTERVAL_MS,
 	createDevicePollingState,
 	createDeviceTelemetry,
@@ -278,7 +279,7 @@ export class DeviceHandler {
 							continue;
 						}
 						if (packResult === "busy") {
-							applyBusyBackoff(state, this.defaultPollingOptions);
+							applyPackBusyBackoff(state, this.defaultPollingOptions);
 							telemetry.busyErrorCount += 1;
 							telemetry.lastBusyAt = new Date().toISOString();
 							this.maybeLogBusyWarning(

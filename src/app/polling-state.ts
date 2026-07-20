@@ -9,6 +9,11 @@
  * @see DeviceHandler
  */
 
+import {
+	FULL_INTERVAL_BUSY_PENALTY_MULTIPLIER,
+	FULL_INTERVAL_RECOVERY_MULTIPLIER,
+} from "./constants.js";
+
 /**
  * Timing and adaptive-backoff limits for device polling.
  *
@@ -307,7 +312,33 @@ export function applyBusyBackoff(
 		options.maxFastIntervalMs,
 	);
 	state.fullIntervalMs = Math.min(
-		state.fullIntervalMs + options.busyPenaltyMs * 2,
+		state.fullIntervalMs +
+			options.busyPenaltyMs * FULL_INTERVAL_BUSY_PENALTY_MULTIPLIER,
+		options.maxFullIntervalMs,
+	);
+	state.commandDelayMs = Math.min(
+		state.commandDelayMs + options.recoveryStepMs,
+		options.maxCommandDelayMs,
+	);
+}
+
+/**
+ * Increases slow/full polling delay after a battery-pack busy response.
+ *
+ * @param state - Mutable polling state to back off.
+ * @param options - Provides penalty amounts and maximum clamps.
+ *
+ * @remarks
+ * Pack reads are exclusive to full cycles, so their backoff must not reduce
+ * the cadence of the independent fast power/state window.
+ */
+export function applyPackBusyBackoff(
+	state: DevicePollingState,
+	options: Required<PollingOptions>,
+): void {
+	state.fullIntervalMs = Math.min(
+		state.fullIntervalMs +
+			options.busyPenaltyMs * FULL_INTERVAL_BUSY_PENALTY_MULTIPLIER,
 		options.maxFullIntervalMs,
 	);
 	state.commandDelayMs = Math.min(
@@ -336,7 +367,8 @@ export function recoverPollingState(
 	);
 	state.fullIntervalMs = Math.max(
 		options.fullIntervalMs,
-		state.fullIntervalMs - options.recoveryStepMs * 2,
+		state.fullIntervalMs -
+			options.recoveryStepMs * FULL_INTERVAL_RECOVERY_MULTIPLIER,
 	);
 	state.commandDelayMs = Math.max(
 		options.commandDelayMs,
