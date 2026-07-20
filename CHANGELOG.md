@@ -8,6 +8,27 @@ been released.
 
 ## Unreleased
 
+### Added
+
+- Simulated Bluetti devices (`SimulatedBluettiDevice`,
+  `createSimulatedRuntime`, `createSimulatedFleet`) that answer the full
+  MODBUS-over-BLE dialect — CRC-validated reads, write echoes, chunked
+  notifications, exception frames, and fault injection — so the entire
+  stack can run without Bluetti hardware on any platform.
+- `--mock` flag on every CLI (and `"mock": true` in the JSON config) to run
+  against the simulated fleet; `bluetti-mqtt-node --mock` auto-polls the
+  fleet when no addresses are given, and `--mock-device <model>` adds
+  simulated models.
+- `createPlatformRuntime` backend selector: Windows helper on `win32`,
+  simulated devices in mock mode, and a clear error elsewhere (native
+  Linux/macOS BLE is planned on `@stoprocent/noble`).
+
+### Changed
+
+- Removed the `"os": ["win32"]` package restriction so the package installs
+  on Linux and macOS; native BLE remains Windows-only for now, but mock mode
+  works everywhere.
+
 ### Fixed
 
 - Battery-pack-only busy responses now back off slow/full polling without

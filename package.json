@@ -1,7 +1,7 @@
 {
   "name": "bluetti-mqtt-node",
   "version": "1.0.1",
-  "description": "Windows-first TypeScript Bluetti BLE to MQTT bridge with MQTT TLS, structured logging, native Windows BLE helper, and data-driven device registry",
+  "description": "TypeScript Bluetti BLE to MQTT bridge with MQTT TLS, structured logging, a native Windows BLE helper, simulated devices for hardware-free testing, and a data-driven device registry",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/lnorton89/bluetti-mqtt-node.git"
@@ -24,9 +24,6 @@
   "engines": {
     "node": ">=22"
   },
-  "os": [
-    "win32"
-  ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

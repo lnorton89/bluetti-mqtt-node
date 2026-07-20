@@ -1,22 +1,23 @@
 #!/usr/bin/env node
 
 import { DeviceSession } from "@bluetooth/device-session.js";
-import {
-	createWindowsHelperRuntime,
-	WindowsHelperClient,
-} from "@bluetooth/helper-client.js";
+import { createPlatformRuntime } from "@bluetooth/runtime.js";
 import type { BluetoothTransport } from "@bluetooth/transport.js";
 import { ReadHoldingRegisters } from "@core/commands.js";
 import { createDeviceFromAdvertisement } from "@devices/registry.js";
 import { hasHelpFlag, optionalSingleAddressArg } from "./args.js";
 import { HelpError } from "./errors.js";
+import { extractMockFlag } from "./mock-flag.js";
 import { runCli } from "./process.js";
 
 /** CLI usage text printed by `--help` or on argument errors. */
-const HELP_TEXT = `Usage: bluetti-mqtt-node-probe [BLUETOOTH_MAC]
+const HELP_TEXT = `Usage: bluetti-mqtt-node-probe [--mock] [BLUETOOTH_MAC]
 
 Without an address, scan for nearby devices.
 With an address, connect and run a single register-read probe.
+
+Options:
+  --mock                Use simulated devices instead of native Bluetooth
 `;
 
 /**
@@ -33,9 +34,10 @@ async function main(): Promise<void> {
 		throw new HelpError(HELP_TEXT);
 	}
 
-	const address = optionalSingleAddressArg(argv, HELP_TEXT);
+	const { mock, rest } = extractMockFlag(argv);
+	const address = optionalSingleAddressArg(rest, HELP_TEXT);
 
-	const client = new WindowsHelperClient();
+	const handle = createPlatformRuntime({ mock });
 	let transport: BluetoothTransport | null = null;
 	let cleanupComplete = false;
 	const cleanup = async (reportDisconnectError: boolean): Promise<void> => {
@@ -53,19 +55,18 @@ async function main(): Promise<void> {
 				}
 			}
 		}
-		client.dispose();
+		handle.dispose();
 	};
 
 	try {
-		const runtime = createWindowsHelperRuntime(client);
 		if (!address) {
-			const devices = await runtime.discovery?.discover();
+			const devices = await handle.runtime.discovery?.discover();
 			console.log(JSON.stringify(devices ?? [], null, 2));
 			await cleanup(true);
 			return;
 		}
 
-		transport = runtime.transportFactory.create();
+		transport = handle.runtime.transportFactory.create();
 		const session = new DeviceSession(address, transport);
 		await session.connectAndInitialize();
 

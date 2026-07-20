@@ -1,38 +1,44 @@
 #!/usr/bin/env node
 
-import {
-	createWindowsHelperRuntime,
-	WindowsHelperClient,
-} from "@bluetooth/helper-client.js";
+import { createPlatformRuntime } from "@bluetooth/runtime.js";
 import { hasHelpFlag } from "./args.js";
-import { HelpError } from "./errors.js";
+import { HelpError, UsageError } from "./errors.js";
+import { extractMockFlag } from "./mock-flag.js";
 import { runCli } from "./process.js";
 
 /** CLI usage text printed by `--help`. */
-const HELP_TEXT = `Usage: bluetti-mqtt-node-discovery
+const HELP_TEXT = `Usage: bluetti-mqtt-node-discovery [--mock]
 
 Scan for nearby Bluetti BLE devices and print them as JSON.
+
+Options:
+  --mock                Use simulated devices instead of native Bluetooth
 `;
 
 /**
- * Owns the helper for one discovery operation.
+ * Owns the Bluetooth runtime for one discovery operation.
  *
  * @remarks
- * Creates a {@link WindowsHelperClient}, scans for nearby BLE devices, prints
- * them as JSON, and disposes the helper.
+ * Selects the platform runtime (or the simulated fleet with `--mock`), scans
+ * for BLE devices, prints them as JSON, and disposes the runtime.
  */
 async function main(): Promise<void> {
-	if (hasHelpFlag(process.argv.slice(2))) {
+	const argv = process.argv.slice(2);
+	if (hasHelpFlag(argv)) {
 		throw new HelpError(HELP_TEXT);
 	}
 
-	const client = new WindowsHelperClient();
+	const { mock, rest } = extractMockFlag(argv);
+	if (rest.length > 0) {
+		throw new UsageError(HELP_TEXT);
+	}
+
+	const handle = createPlatformRuntime({ mock });
 	try {
-		const runtime = createWindowsHelperRuntime(client);
-		const devices = await runtime.discovery?.discover();
+		const devices = await handle.runtime.discovery?.discover();
 		console.log(JSON.stringify(devices ?? [], null, 2));
 	} finally {
-		client.dispose();
+		handle.dispose();
 	}
 }
 

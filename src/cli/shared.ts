@@ -1,8 +1,8 @@
 import { DeviceSession } from "@bluetooth/device-session.js";
 import {
-	createWindowsHelperRuntime,
-	WindowsHelperClient,
-} from "@bluetooth/helper-client.js";
+	createPlatformRuntime,
+	type PlatformRuntimeOptions,
+} from "@bluetooth/runtime.js";
 import type { BluetoothTransport } from "@bluetooth/transport.js";
 import type { ReadHoldingRegisters } from "@core/commands.js";
 import type { BluettiDevice } from "@devices/device.js";
@@ -13,21 +13,23 @@ import { createDeviceFromAdvertisement } from "@devices/registry.js";
  *
  * @param address - Bluetooth MAC address to connect.
  * @param work - Callback receiving the connected device context.
+ * @param runtimeOptions - Backend selection (e.g. `{ mock: true }`).
  * @returns The result of `work`.
  * @throws {Error} When connection or initialization fails.
  *
  * @remarks
  * The original operation error takes precedence over a secondary disconnect
  * failure; successful work still reports disconnect failures to the caller.
- * The helper client is always disposed during cleanup.
+ * The runtime handle is always disposed during cleanup.
  *
  * @see ConnectedDeviceContext
  */
 export async function withConnectedDevice<T>(
 	address: string,
 	work: (context: ConnectedDeviceContext) => Promise<T>,
+	runtimeOptions: PlatformRuntimeOptions = {},
 ): Promise<T> {
-	const client = new WindowsHelperClient();
+	const handle = createPlatformRuntime(runtimeOptions);
 	let transport: BluetoothTransport | null = null;
 	let cleanupComplete = false;
 	const cleanup = async (reportDisconnectError: boolean): Promise<void> => {
@@ -45,12 +47,11 @@ export async function withConnectedDevice<T>(
 				}
 			}
 		}
-		client.dispose();
+		handle.dispose();
 	};
 
 	try {
-		const runtime = createWindowsHelperRuntime(client);
-		transport = runtime.transportFactory.create();
+		transport = handle.runtime.transportFactory.create();
 		const session = new DeviceSession(address, transport);
 		await session.connectAndInitialize();
 

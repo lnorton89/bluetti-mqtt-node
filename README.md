@@ -102,15 +102,49 @@ npm run helper:publish
 npm run bluetti-mqtt -- --broker mqtt://127.0.0.1:1883 --interval 5 24:4C:AB:2C:24:8E
 ```
 
+## Mock Mode (No Hardware Required)
+
+Every CLI accepts a `--mock` flag that swaps native Bluetooth for a simulated
+Bluetti device fleet. The simulator answers the real MODBUS-over-BLE dialect
+(CRC-validated reads, write echoes, chunked notifications, exception frames),
+so the entire pipeline — discovery, polling, parsing, setters, and the MQTT
+bridge — runs identically to real hardware. This works on **any platform**,
+including Linux and macOS, and needs no Bluetti device, Bluetooth adapter, or
+.NET helper:
+
+```bash
+npm ci
+npm run build
+
+# List the simulated fleet (an AC500 at 00:11:22:33:44:55 by default)
+node dist/cli/bluetti-discovery.js --mock
+
+# One full polling cycle against the simulated AC500
+node dist/cli/poll.js --mock 00:11:22:33:44:55
+
+# Full MQTT bridge against a local broker; addresses default to the mock fleet
+node dist/cli/bluetti-mqtt.js --mock --broker mqtt://127.0.0.1:1883 --interval 5
+```
+
+`bluetti-mqtt` also accepts `--mock-device <model>` (repeatable) to simulate
+other models from the registry, and `"mock": true` in the JSON config file.
+Library consumers can build their own fleets with `SimulatedBluettiDevice`
+and `createSimulatedRuntime`, including fault injection (`queueException`,
+`dropNextResponse`) for testing busy/timeout handling.
+
+Native (non-mock) Bluetooth currently requires Windows; a Linux/macOS backend
+based on `@stoprocent/noble` is planned, and `createPlatformRuntime` is the
+seam it will plug into.
+
 ## Requirements
 
 Runtime requirements:
 
-- Windows
+- Windows for native Bluetooth (mock mode runs on Linux/macOS/Windows)
 - Node.js 22 or newer
 - npm
 - .NET SDK 6.0+ if you are building the Windows helper from source
-- Bluetooth adapter supported by Windows BLE APIs
+- Bluetooth adapter supported by Windows BLE APIs (not needed in mock mode)
 - MQTT broker reachable from the machine running this project
 
 Development requirements:

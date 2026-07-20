@@ -1,5 +1,6 @@
 /** Sequentially imports and runs all test modules. */
 await import("./device-session.test.mjs");
+await import("./simulated-device.test.mjs");
 await import("./broker-client.test.mjs");
 await import("./device-setter.test.mjs");
 await import("./struct.test.mjs");

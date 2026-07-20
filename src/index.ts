@@ -1,10 +1,11 @@
 /**
- * Windows-first Bluetti BLE transport, device models, and MQTT bridge.
+ * Bluetti BLE transport, device models, and MQTT bridge.
  *
  * @remarks
  * This package connects to Bluetti power stations over Bluetooth Low Energy
- * (via a native Windows helper process), polls device state through the
- * Bluetti MODBUS-over-BLE protocol, and publishes that state to MQTT.
+ * (via a native Windows helper process, with simulated devices available on
+ * every platform), polls device state through the Bluetti MODBUS-over-BLE
+ * protocol, and publishes that state to MQTT.
  *
  * The public API is organized into layers:
  * - **core** — MODBUS commands, CRC, shared types, event bus, logging
@@ -22,6 +23,8 @@ export * from "@bluetooth/helper-client.js";
 export * from "@bluetooth/helper-protocol.js";
 export * from "@bluetooth/manager.js";
 export * from "@bluetooth/mock-transport.js";
+export * from "@bluetooth/runtime.js";
+export * from "@bluetooth/simulated-device.js";
 export * from "@bluetooth/transport.js";
 export * from "@broker/client.js";
 export * from "@core/commands.js";

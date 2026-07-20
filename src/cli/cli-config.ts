@@ -23,6 +23,8 @@ export interface CliConfigFile {
 	addresses?: readonly string[];
 	/** Minimum log level. */
 	logLevel?: LogLevel;
+	/** Whether to use simulated devices instead of native Bluetooth. */
+	mock?: boolean;
 }
 
 /** File-path-oriented MQTT TLS settings accepted in JSON config files. */
@@ -195,6 +197,12 @@ export async function readConfigFile(path: string): Promise<CliConfigFile> {
 			throw invalidConfigValue(path, "logLevel");
 		}
 		config.logLevel = candidate.logLevel;
+	}
+	if (candidate.mock !== undefined) {
+		if (typeof candidate.mock !== "boolean") {
+			throw invalidConfigValue(path, "mock");
+		}
+		config.mock = candidate.mock;
 	}
 
 	return config;

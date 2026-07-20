@@ -8,6 +8,7 @@
   "interval": 5,
   "once": false,
   "logLevel": "info",
+  "mock": false,
   "addresses": [
     "24:4C:AB:2C:24:8E"
   ]

@@ -1,10 +1,7 @@
 #!/usr/bin/env node
 
 import { BluettiMqttServer } from "@app/server.js";
-import {
-	createWindowsHelperRuntime,
-	WindowsHelperClient,
-} from "@bluetooth/helper-client.js";
+import { createPlatformRuntime } from "@bluetooth/runtime.js";
 import type { MqttTlsOptions } from "@broker/client.js";
 import { ConsoleLogger, type LogLevel } from "@core/logger.js";
 import { validateBluetoothAddress } from "./args.js";
@@ -36,6 +33,9 @@ Options:
   --interval <seconds>  Poll interval in seconds for continuous mode
   --log-level <level>   debug, info, warn, or error
   --once                Poll and publish once, then exit
+  --mock                Use simulated devices instead of native Bluetooth;
+                        addresses may be omitted to poll the whole mock fleet
+  --mock-device <model> Add a simulated device model (repeatable, default AC500)
   -h, --help            Show this help text
 `;
 
@@ -53,15 +53,24 @@ async function main(): Promise<void> {
 		throw new HelpError(HELP_TEXT);
 	}
 
-	if (!args.brokerUrl || args.addresses.length === 0) {
+	if (!args.brokerUrl || (args.addresses.length === 0 && !args.mock)) {
 		throw new UsageError(HELP_TEXT);
 	}
 
 	const logger = new ConsoleLogger(args.logLevel);
-	const helper = new WindowsHelperClient();
+	const handle = createPlatformRuntime(
+		args.mockDevices === undefined
+			? { mock: args.mock }
+			: { mock: args.mock, mockDevices: args.mockDevices },
+	);
 	let removeSignalHandlers: (() => void) | undefined;
 	try {
-		const runtime = createWindowsHelperRuntime(helper);
+		const runtime = handle.runtime;
+		// In mock mode with no explicit addresses, poll the whole simulated fleet.
+		if (args.addresses.length === 0) {
+			const discovered = (await runtime.discovery?.discover()) ?? [];
+			args.addresses.push(...discovered.map((device) => device.address));
+		}
 		const mqttOptions: {
 			url: string;
 			username?: string;
@@ -97,11 +106,12 @@ async function main(): Promise<void> {
 			brokerUrl: args.brokerUrl,
 			intervalMs: args.intervalMs,
 			runOnce: args.runOnce,
+			mock: args.mock,
 		});
 		await server.run();
 	} finally {
 		removeSignalHandlers?.();
-		helper.dispose();
+		handle.dispose();
 	}
 }
 
@@ -122,6 +132,8 @@ async function parseArgs(argv: readonly string[]): Promise<{
 	addresses: string[];
 	help: boolean;
 	logLevel: LogLevel;
+	mock: boolean;
+	mockDevices: string[] | undefined;
 }> {
 	const addresses: string[] = [];
 	let brokerUrl: string | undefined;
@@ -137,6 +149,8 @@ async function parseArgs(argv: readonly string[]): Promise<{
 	let help = false;
 	let configPath: string | undefined;
 	let logLevel: LogLevel = "info";
+	let mock = false;
+	let mockDevices: string[] | undefined;
 
 	for (let index = 0; index < argv.length; index += 1) {
 		const token = argv[index];
@@ -197,6 +211,14 @@ async function parseArgs(argv: readonly string[]): Promise<{
 			case "--once":
 				runOnce = true;
 				break;
+			case "--mock":
+				mock = true;
+				break;
+			case "--mock-device":
+				mockDevices = mockDevices ?? [];
+				mockDevices.push(requireValue(argv, index, HELP_TEXT));
+				index += 1;
+				break;
 			default:
 				if (token) {
 					addresses.push(validateBluetoothAddress(token));
@@ -221,6 +243,7 @@ async function parseArgs(argv: readonly string[]): Promise<{
 				? intervalMs
 				: parseIntervalSeconds(String(config.interval ?? 0), HELP_TEXT);
 		runOnce = runOnce || config.once === true;
+		mock = mock || config.mock === true;
 		logLevel = logLevel !== "info" ? logLevel : (config.logLevel ?? "info");
 		if (addresses.length === 0 && config.addresses !== undefined) {
 			addresses.push(
@@ -247,6 +270,8 @@ async function parseArgs(argv: readonly string[]): Promise<{
 		addresses,
 		help,
 		logLevel,
+		mock,
+		mockDevices,
 	};
 }
 
