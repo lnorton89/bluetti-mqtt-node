@@ -2,9 +2,10 @@
  * Indicates that the active GATT session cannot safely continue.
  *
  * Thrown when the transport reports a disposed object, an unreachable device,
- * or when an unexpected AT control message arrives instead of a MODBUS
- * response. The {@link MultiDeviceManager} treats this as a signal to replace
- * the session via {@link MultiDeviceManager.reconnect}.
+ * a transiently incomplete GATT characteristic set, or when an unexpected AT
+ * control message arrives instead of a MODBUS response. The
+ * {@link MultiDeviceManager} treats this as a signal to replace the session via
+ * {@link MultiDeviceManager.reconnect}.
  *
  * @see DeviceSession.perform
  * @see MultiDeviceManager.reconnect

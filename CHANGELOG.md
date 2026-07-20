@@ -12,6 +12,8 @@ been released.
 
 - Battery-pack-only busy responses now back off slow/full polling without
   stretching the independent fast power/state telemetry interval.
+- Transient Windows GATT characteristic-missing responses are now classified
+  as recoverable connection failures and retried during device initialization.
 
 ## 1.0.1
 

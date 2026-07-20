@@ -6,6 +6,7 @@ export const DEFAULT_WITHOUT_RESPONSE = false;
 export const HELPER_ERROR_COMMAND_FAILED = "command_failed";
 export const DISPOSED_OBJECT_ERROR_TEXT = "cannot access a disposed object";
 export const UNREACHABLE_ERROR_TEXT = "unreachable";
+export const MISSING_CHARACTERISTIC_ERROR_TEXT = "was not found on device";
 export const GATT_UNREACHABLE_TEXT = "enumerate GATT services: unreachable";
 export const GATT_FAILED_UNREACHABLE_TEXT =
 	"failed to enumerate GATT services: unreachable";

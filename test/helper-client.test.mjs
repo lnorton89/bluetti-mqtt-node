@@ -18,6 +18,7 @@ async function run() {
 	testDisposedObjectErrorMapping();
 	testGattUnreachableErrorMapping();
 	testGattWriteUnreachableErrorMapping();
+	testMissingCharacteristicErrorMapping();
 	testMalformedJsonBeforeReady();
 	await testPublicRequestMethodsValidatePayloads();
 	await testScanFiltersMalformedDevices();
@@ -169,6 +170,35 @@ function testGattWriteUnreachableErrorMapping() {
 				code: "command_failed",
 				message:
 					"Failed to write characteristic 0000ff02-0000-1000-8000-00805f9b34fb: Unreachable.",
+			},
+		}),
+		() => {},
+		() => {},
+	);
+
+	assert.equal(errors.length, 1);
+	assert.ok(errors[0] instanceof BadConnectionError);
+}
+
+/** A transiently missing GATT characteristic is mapped to BadConnectionError. */
+function testMissingCharacteristicErrorMapping() {
+	const client = makeClientHarness();
+	const errors = [];
+	client.pending.set("request-1", {
+		resolve: () => {},
+		reject: (error) => {
+			errors.push(error);
+		},
+	});
+
+	client.handleLine(
+		JSON.stringify({
+			type: "error",
+			id: "request-1",
+			error: {
+				code: "command_failed",
+				message:
+					"Characteristic 0000ff01-0000-1000-8000-00805f9b34fb was not found on device AC5002237000003358.",
 			},
 		}),
 		() => {},

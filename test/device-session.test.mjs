@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { DeviceSession } from "../dist/bluetooth/device-session.js";
-import { CommandTimeoutError } from "../dist/bluetooth/errors.js";
+import {
+	BadConnectionError,
+	CommandTimeoutError,
+} from "../dist/bluetooth/errors.js";
 import { MockBluetoothTransport } from "../dist/bluetooth/mock-transport.js";
+import { isRetryableInitializationError } from "../dist/bluetooth/session-utils.js";
 import {
 	ReadHoldingRegisters,
 	WriteMultipleRegisters,
@@ -20,10 +24,21 @@ async function run() {
 	await testChunkedResponse();
 	await testCommandTimeout();
 	await testDisconnectFailureStillResetsSessionState();
+	testBadConnectionInitializationErrorsAreRetryable();
 	testValidatesModbusResponseIdentityAndPayload();
 	testRejectsInvalidRegisterQuantities();
 	testValidatesCompleteExceptionResponses();
 	console.log("device-session smoke test passed");
+}
+
+/** Domain-classified connection failures are retried regardless of helper wording. */
+function testBadConnectionInitializationErrorsAreRetryable() {
+	assert.equal(
+		isRetryableInitializationError(
+			new BadConnectionError("Characteristic was not found on device"),
+		),
+		true,
+	);
 }
 
 /** A response arriving in multiple BLE notification chunks is reassembled correctly. */

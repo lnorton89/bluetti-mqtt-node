@@ -3,6 +3,7 @@ import {
 	HELPER_ERROR_COMMAND_FAILED,
 	HELPER_EVENT_NOTIFICATION,
 	HELPER_MESSAGE_TYPE_EVENT,
+	MISSING_CHARACTERISTIC_ERROR_TEXT,
 	UNREACHABLE_ERROR_TEXT,
 } from "./constants.js";
 import { BadConnectionError } from "./errors.js";
@@ -123,7 +124,9 @@ function isRecoverableBluetoothConnectionError(
 	const normalizedMessage = message.toLowerCase();
 	return (
 		normalizedMessage.includes(DISPOSED_OBJECT_ERROR_TEXT) ||
-		normalizedMessage.includes(UNREACHABLE_ERROR_TEXT)
+		normalizedMessage.includes(UNREACHABLE_ERROR_TEXT) ||
+		(normalizedMessage.includes("characteristic") &&
+			normalizedMessage.includes(MISSING_CHARACTERISTIC_ERROR_TEXT))
 	);
 }
 

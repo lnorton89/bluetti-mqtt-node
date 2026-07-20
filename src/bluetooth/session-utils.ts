@@ -5,6 +5,7 @@ import {
 	GATT_UNREACHABLE_TEXT,
 	UNREACHABLE_ERROR_TEXT,
 } from "./constants.js";
+import { BadConnectionError } from "./errors.js";
 
 /**
  * Returns whether an initialization error is worth retrying.
@@ -19,6 +20,10 @@ import {
  * succeeds.
  */
 export function isRetryableInitializationError(error: unknown): boolean {
+	if (error instanceof BadConnectionError) {
+		return true;
+	}
+
 	const message = error instanceof Error ? error.message : String(error);
 	const normalized = message.toLowerCase();
 	return (
